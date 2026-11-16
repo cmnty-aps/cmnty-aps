@@ -102,8 +102,7 @@ export default function App() {
                 >
                   <strong>SoraStream</strong> adalah aplikasi streaming anime{' '}
                   <strong>GRATIS!</strong> yang menggunakan data anime dari <strong>AniList</strong>{' '}
-                  dan berbagai <strong>Scraper</strong> untuk streaming, bebas{' '}
-                  <strong>tanpa iklan</strong>.
+                  dan berbagai <strong>Scraper</strong> untuk streaming episode.
                 </motion.p>
 
                 {/* Primary Responsive Tactile Solid Pastel Kawaii CTA */}
