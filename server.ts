@@ -47,13 +47,23 @@ async function startServer() {
     return { owner: '', repo: '' };
   }
 
+  // GitHub secrets cannot start with GITHUB_, so check custom names
+  function getGitHubToken(): string | undefined {
+    return (
+      process.env.CUSTOM_GH_TOKEN ||
+      process.env.GH_TOKEN ||
+      process.env.SORA_GH_TOKEN ||
+      process.env.PERSONAL_TOKEN
+    );
+  }
+
   // API endpoint for app config
   app.get('/api/config', (_req, res) => {
     const config = getConfig();
-    const hasToken = Boolean(process.env.GITHUB_TOKEN || process.env.GH_TOKEN);
+    const token = getGitHubToken();
     res.json({
       ...config,
-      hasGitHubToken: hasToken,
+      hasGitHubToken: Boolean(token),
     });
   });
 
@@ -68,7 +78,7 @@ async function startServer() {
         return res.status(400).json({ error: 'Repository URL not configured in public/asset.json' });
       }
 
-      const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+      const token = getGitHubToken();
       const headers: Record<string, string> = {
         'Accept': 'application/vnd.github.v3+json',
         'User-Agent': 'SoraStream-Downloader',
@@ -111,7 +121,7 @@ async function startServer() {
         return res.json([]);
       }
 
-      const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+      const token = getGitHubToken();
       const headers: Record<string, string> = {
         'Accept': 'application/vnd.github.v3+json',
         'User-Agent': 'SoraStream-Downloader',
@@ -136,7 +146,7 @@ async function startServer() {
     }
   });
 
-  // API endpoint to proxy private release asset downloads securely using GITHUB_TOKEN
+  // API endpoint to proxy private release asset downloads securely using token
   app.get('/api/github/download', async (req, res) => {
     try {
       const assetUrl = req.query.url as string;
@@ -144,7 +154,7 @@ async function startServer() {
         return res.status(400).json({ error: 'Missing asset url' });
       }
 
-      const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+      const token = getGitHubToken();
       const headers: Record<string, string> = {
         'Accept': 'application/octet-stream',
         'User-Agent': 'SoraStream-Downloader',
