@@ -11,4 +11,5 @@ export interface ApkVersionItem {
   isSameOrigin: boolean;
   sourceLabel: string;
   versionParts: number[];
+  downloadCount?: number;
 }

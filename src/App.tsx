@@ -19,6 +19,7 @@ export default function App() {
     availableApks,
     activeDownloadItem,
     totalDownloads,
+    repoConfig,
     openApkPicker,
     closeApkPicker,
     downloadApkItem,
@@ -152,6 +153,7 @@ export default function App() {
           isLoading={isLoadingApks}
           apks={availableApks}
           totalDownloads={totalDownloads}
+          repoConfig={repoConfig}
           onClose={closeApkPicker}
           onSelectApk={downloadApkItem}
         />

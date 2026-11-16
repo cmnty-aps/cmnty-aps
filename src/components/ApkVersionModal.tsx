@@ -3,12 +3,14 @@ import { Download, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { formatApkSize } from '../hooks/useApkDownload';
 import type { ApkVersionItem } from '../types/nekostream';
+import type { RepoConfigInfo } from '../hooks/useApkDownload';
 
 interface ApkVersionModalProps {
   isOpen: boolean;
   isLoading: boolean;
   apks: ApkVersionItem[];
   totalDownloads?: string;
+  repoConfig?: RepoConfigInfo;
   onClose: () => void;
   onSelectApk: (item: ApkVersionItem) => void;
 }
@@ -20,6 +22,7 @@ export function ApkVersionModal({
   isLoading,
   apks,
   totalDownloads,
+  repoConfig,
   onClose,
   onSelectApk,
 }: ApkVersionModalProps) {
@@ -53,7 +56,7 @@ export function ApkVersionModal({
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
             transition={{ duration: 0.24, ease: SILKY_EASE }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl bg-[#FFFDF9] border border-[#E5D4EE] shadow-[0_24px_60px_-15px_rgba(43,29,56,0.28)] overflow-hidden"
+            className="w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl bg-[#FFFDF9] border border-[#E5D4EE] shadow-[0_24px_60px_-15px_rgba(43,29,56,0.28)] overflow-hidden"
           >
             {/* Header */}
             <div className="px-5 pt-5 pb-4 border-b border-[#EFE3F5] flex items-start justify-between gap-4">
@@ -85,7 +88,7 @@ export function ApkVersionModal({
             </div>
 
             {/* Body */}
-            <div className="p-5 max-h-[65vh] overflow-y-auto space-y-2.5">
+            <div className="p-5 max-h-[60vh] overflow-y-auto space-y-2.5">
               {isLoading && apks.length === 0 && (
                 <div className="space-y-2.5" aria-busy="true">
                   {[0, 1].map((idx) => (
@@ -107,11 +110,7 @@ export function ApkVersionModal({
                 <div className="rounded-2xl border border-[#FBCFE8] bg-[#FFF5F9] p-4 space-y-2 text-sm">
                   <p className="font-bold text-[#831843]">Belum ada file APK yang tersedia.</p>
                   <p className="text-xs text-[#6C587A] leading-relaxed">
-                    Unggah file <code className="font-mono text-[#500724]">.apk</code> asli ke folder{' '}
-                    <code className="font-mono text-[#500724]">public/</code> seperti{' '}
-                    <code className="font-mono text-[#500724]">public/sorastreamv2.apk</code> atau{' '}
-                    <code className="font-mono text-[#500724]">public/sorastreamv3.apk</code>, maupun
-                    melalui <strong>GitHub Releases</strong>.
+                    Pastikan URL repository GitHub telah diatur di <code className="font-mono text-[#500724]">public/asset.json</code> dan memiliki Release dengan asset <code className="font-mono text-[#500724]">.apk</code>.
                   </p>
                 </div>
               )}
@@ -141,6 +140,12 @@ export function ApkVersionModal({
                         <p className="text-xs text-[#6C587A] truncate mt-0.5 tabular-nums">
                           {item.fileName}
                           {sizeText ? ` · ${sizeText}` : ''}
+                          {typeof item.downloadCount === 'number' && (
+                            <span className="text-[#831843] font-semibold ml-1.5">
+                              · {item.downloadCount.toLocaleString('id-ID')} unduhan
+                            </span>
+                          )}
+                          <span className="text-[11px] text-[#9CA3AF] ml-1.5">({item.sourceLabel})</span>
                         </p>
                       </div>
                     </div>
