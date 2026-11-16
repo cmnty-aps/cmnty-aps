@@ -1,13 +1,16 @@
-PANDUAN UPLOAD FILE APK NEKOSTREAM
-===================================
+PANDUAN UPLOAD FILE APK SORASTREAM
+====================================
 
-1. Siapkan file APK Android aplikasi NekoStream Anda.
-2. Ubah nama file menjadi: nekostream.apk
-3. Taruh file nekostream.apk langsung di dalam folder public/ ini
-   sehingga path-nya menjadi:
+Pilih salah satu cara berikut agar tombol "Unduh SoraStream.apk" bekerja:
 
-   public/nekostream.apk
+CARA 1 — Upload ke GitHub Releases (Direkomendasikan, tanpa batas 25 MB)
+1. Buka repository GitHub Anda -> menu "Releases" -> "Draft a new release".
+2. Isi Tag (misal v1.0.0), lalu unggah file .apk Anda ke bagian "Attach binaries".
+3. Klik "Publish release".
+4. Website akan otomatis mendeteksi dan mengunduh file .apk dari Release terbaru.
 
-4. Setelah file berada di sini, tombol "Unduh APK" di landing page
-   akan otomatis mendeteksi dan mengunduh file /nekostream.apk
-   sebagai NekoStream.apk.
+CARA 2 — Upload langsung ke folder public/ (Jika ukuran APK di bawah 25 MB)
+1. Ubah nama file APK asli Anda menjadi: sorastream.apk
+2. Unggah langsung melalui GitHub ("Add file" -> "Upload files") atau git push ke:
+   public/sorastream.apk
+   (Jangan gunakan tombol edit teks untuk membuat file APK karena hanya menghasilkan file kosong.)

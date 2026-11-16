@@ -130,12 +130,6 @@ export function TopBar({
             >
               Screenshot
             </a>
-            <a
-              href="#fitur"
-              className="hover:text-[#BE185D] hover:underline underline-offset-4 transition-colors duration-200 whitespace-nowrap shrink-0"
-            >
-              Keunggulan
-            </a>
           </motion.nav>
 
           {/* Conditional CTA Button: fades & glides in cleanly on the right */}

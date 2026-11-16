@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Download, X } from 'lucide-react';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { FeatureBento } from './components/FeatureBento';
 import { PhoneScreenshotShowcase } from './components/PhoneScreenshotShowcase';
 import { TopBar } from './components/TopBar';
 import { useApkDownload } from './hooks/useApkDownload';
@@ -127,9 +126,6 @@ export default function App() {
               </div>
             </div>
           </section>
-
-          {/* Editorial Kawaii Feature Breakdown */}
-          <FeatureBento />
         </main>
 
         {/* Floating Download Popup Toast */}
@@ -168,12 +164,12 @@ export default function App() {
                   >
                     {downloadStatus === 'started'
                       ? 'Mengunduh apk'
-                      : 'File sorastream.apk belum tersedia.'}
+                      : 'File APK asli belum tersedia.'}
                   </p>
                   <p className="text-xs text-[#6C587A] mt-0.5">
                     {downloadStatus === 'started'
                       ? 'Periksa folder unduhan Android Anda untuk memasang aplikasi.'
-                      : 'Unggah file ke public/sorastream.apk untuk mengaktifkan unduhan.'}
+                      : 'Unggah file .apk ke GitHub Releases atau ke public/sorastream.apk di repository.'}
                   </p>
                 </div>
               </div>
@@ -191,30 +187,16 @@ export default function App() {
 
         {/* Quiet Kawaii Footer */}
         <footer className="border-t border-[#E3D3F0] bg-[#EFE5F9] py-8 sm:py-10">
-          <div className="max-w-[1120px] mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3.5 sm:gap-4 text-xs text-[#6C587A] text-center sm:text-left">
+          <div className="max-w-[1120px] mx-auto px-4 sm:px-6 flex items-center justify-center text-xs text-[#6C587A] text-center">
             <motion.p
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0, y: 8 }}
+              whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.1 }}
               transition={{ duration: 0.55, ease: SILKY_EASE }}
               className="font-display font-extrabold text-sm text-[#2B1D38]"
             >
               SoraStream
             </motion.p>
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.1 }}
-              transition={{ duration: 0.55, delay: 0.05, ease: SILKY_EASE }}
-              className="flex items-center gap-5 sm:gap-6 flex-wrap justify-center"
-            >
-              <a href="#pratinjau" className="hover:text-[#BE185D] transition-colors">
-                Screenshot
-              </a>
-              <a href="#fitur" className="hover:text-[#BE185D] transition-colors">
-                Keunggulan
-              </a>
-            </motion.div>
           </div>
         </footer>
       </div>
