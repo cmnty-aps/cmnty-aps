@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import bundledApks from 'virtual:apk-files';
 import type { ApkVersionItem, DownloadStatus } from '../types/nekostream';
 
@@ -15,8 +15,14 @@ const FALLBACK_CANDIDATE_FILES = [
   'sorastreamv3.apk',
   'sorastreamv4.apk',
   'sorastreamv5.apk',
+  'sorastream-v1.apk',
   'sorastream-v2.apk',
   'sorastream-v3.apk',
+  'sorastream_v1.apk',
+  'sorastream_v2.apk',
+  'sorastream_v3.apk',
+  'app-release.apk',
+  'app-debug.apk',
 ];
 
 interface GitHubContentItem {
@@ -85,13 +91,22 @@ function buildVersionLabel(fileName: string, releaseTag?: string): {
   label: string;
   versionParts: number[];
 } {
+  const lower = fileName.toLowerCase();
+  if (lower === 'sorastream.apk' || lower === 'nekostream.apk' || lower === 'sorastreamv1.apk') {
+    return {
+      label: 'SoraStream v1.0 (Default)',
+      versionParts: [1, 0],
+    };
+  }
+
   const baseName = fileName.replace(/\.apk$/i, '');
   const fileVersionMatch = baseName.match(/v?(\d+(?:\.\d+)*)$/i);
 
   if (fileVersionMatch) {
     const verText = fileVersionMatch[1];
+    const formattedVer = verText.includes('.') ? verText : `${verText}.0`;
     return {
-      label: `SoraStream v${verText}`,
+      label: `SoraStream v${formattedVer}`,
       versionParts: parseVersionParts(verText),
     };
   }
@@ -237,14 +252,11 @@ async function fetchGitHubPublicApks(repoSlug: string): Promise<ApkVersionItem[]
 
     const resolved = await Promise.all(
       apkEntries.map(async (entry): Promise<ApkVersionItem | null> => {
-        // 1. Check if this file actually exists as a real APK binary on the current origin
         const localItem = await probeLocalApkFile(entry.name);
         if (localItem) {
           return localItem;
         }
 
-        // 2. Otherwise resolve directly from GitHub Pages (application/vnd.android.package-archive)
-        //    or raw.githubusercontent.com so another host never serves an HTML SPA fallback
         const pagesUrl = getGitHubPagesFileUrl(repoSlug, entry.name);
         let remoteUrl: string | null = null;
         if (pagesUrl && (await isRemoteBinaryAvailable(pagesUrl))) {
@@ -318,13 +330,93 @@ async function fetchGitHubReleaseApks(repoSlug: string): Promise<ApkVersionItem[
   }
 }
 
+const COUNT_CACHE_KEY = 'sorastream_download_count_cache';
+
 export function useApkDownload() {
   const [downloadStatus, setDownloadStatus] = useState<DownloadStatus>('idle');
   const [isPickerOpen, setIsPickerOpen] = useState<boolean>(false);
   const [isLoadingApks, setIsLoadingApks] = useState<boolean>(false);
   const [availableApks, setAvailableApks] = useState<ApkVersionItem[]>([]);
   const [activeDownloadItem, setActiveDownloadItem] = useState<ApkVersionItem | null>(null);
+  const [totalDownloads, setTotalDownloads] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem(COUNT_CACHE_KEY);
+        if (cached) return cached;
+      } catch {
+        // Ignore storage restrictions
+      }
+    }
+    return '0 Unduhan';
+  });
+
   const isFetchingRef = useRef(false);
+  const downloadTimerRef = useRef<number | null>(null);
+
+  const updateCountState = useCallback((formatted: string) => {
+    setTotalDownloads(formatted);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(COUNT_CACHE_KEY, formatted);
+      } catch {
+        // Ignore storage restrictions
+      }
+    }
+  }, []);
+
+  // Auto-dismiss floating toast notification after 6 seconds
+  useEffect(() => {
+    if (downloadStatus === 'started') {
+      if (downloadTimerRef.current) {
+        window.clearTimeout(downloadTimerRef.current);
+      }
+      downloadTimerRef.current = window.setTimeout(() => {
+        setDownloadStatus('idle');
+        setActiveDownloadItem(null);
+      }, 6000);
+    }
+    return () => {
+      if (downloadTimerRef.current) {
+        window.clearTimeout(downloadTimerRef.current);
+      }
+    };
+  }, [downloadStatus]);
+
+  useEffect(() => {
+    // Real-time counter from public JSON API (no login, no key required)
+    fetch('https://countapi.mileshilliard.com/api/v1/get/sorastream-cmnty-downloads', {
+      cache: 'no-store',
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data.value === 'number') {
+          const val = data.value;
+          const formatted =
+            val >= 1000
+              ? `${val.toLocaleString('id-ID')}+ Unduhan`
+              : `${val.toLocaleString('id-ID')} Unduhan`;
+          updateCountState(formatted);
+        } else {
+          return fetch('./version.json', { cache: 'no-store' })
+            .then((res) => res.json())
+            .then((vData) => {
+              if (vData && typeof vData.totalDownloads === 'string') {
+                updateCountState(vData.totalDownloads);
+              }
+            });
+        }
+      })
+      .catch(() => {
+        fetch('./version.json', { cache: 'no-store' })
+          .then((res) => res.json())
+          .then((vData) => {
+            if (vData && typeof vData.totalDownloads === 'string') {
+              updateCountState(vData.totalDownloads);
+            }
+          })
+          .catch(() => {});
+      });
+  }, [updateCountState]);
 
   const loadAvailableApks = useCallback(async () => {
     if (isFetchingRef.current) return;
@@ -335,7 +427,6 @@ export function useApkDownload() {
       const repoSlug = getGitHubRepoSlug();
       const mapByFile = new Map<string, ApkVersionItem>();
 
-      // 1. Build-time / dev-time scanned public/*.apk files
       for (const bundled of bundledApks) {
         const { label, versionParts } = buildVersionLabel(bundled.fileName);
         mapByFile.set(bundled.fileName.toLowerCase(), {
@@ -350,7 +441,6 @@ export function useApkDownload() {
         });
       }
 
-      // 2. Live GitHub public/ contents + GitHub Releases in parallel
       const [ghPublic, ghReleases] = await Promise.all([
         fetchGitHubPublicApks(repoSlug),
         fetchGitHubReleaseApks(repoSlug),
@@ -370,7 +460,6 @@ export function useApkDownload() {
         }
       }
 
-      // 3. Fallback static probing if nothing was found via manifest or GitHub API
       if (mapByFile.size === 0) {
         const probed = await Promise.all(
           FALLBACK_CANDIDATE_FILES.map((name) => probeLocalApkFile(name))
@@ -399,23 +488,64 @@ export function useApkDownload() {
     setIsPickerOpen(false);
   }, []);
 
-  const downloadApkItem = useCallback((item: ApkVersionItem) => {
-    const link = document.createElement('a');
-    link.href = item.url;
-    if (item.isSameOrigin) {
-      link.setAttribute('download', item.fileName || APK_DOWNLOAD_FILENAME);
-    }
-    link.rel = 'noopener';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const downloadApkItem = useCallback(
+    (item: ApkVersionItem) => {
+      // Optimistic download increment
+      setTotalDownloads((prev) => {
+        const digits = parseInt(prev.replace(/\D/g, ''), 10) || 0;
+        const next = digits + 1;
+        const formatted =
+          next >= 1000
+            ? `${next.toLocaleString('id-ID')}+ Unduhan`
+            : `${next.toLocaleString('id-ID')} Unduhan`;
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(COUNT_CACHE_KEY, formatted);
+          } catch {
+            // Ignore storage restrictions
+          }
+        }
+        return formatted;
+      });
 
-    setActiveDownloadItem(item);
-    setIsPickerOpen(false);
-    setDownloadStatus('started');
-  }, []);
+      // Hit public real-time counter API
+      fetch('https://countapi.mileshilliard.com/api/v1/hit/sorastream-cmnty-downloads', {
+        cache: 'no-store',
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && typeof data.value === 'number') {
+            const val = data.value;
+            const formatted =
+              val >= 1000
+                ? `${val.toLocaleString('id-ID')}+ Unduhan`
+                : `${val.toLocaleString('id-ID')} Unduhan`;
+            updateCountState(formatted);
+          }
+        })
+        .catch(() => {});
+
+      const link = document.createElement('a');
+      link.href = item.url;
+      if (item.isSameOrigin) {
+        link.setAttribute('download', item.fileName || APK_DOWNLOAD_FILENAME);
+      }
+      link.rel = 'noopener';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setActiveDownloadItem(item);
+      setIsPickerOpen(false);
+      setDownloadStatus('started');
+    },
+    [updateCountState]
+  );
 
   const resetDownloadStatus = useCallback(() => {
+    if (downloadTimerRef.current) {
+      window.clearTimeout(downloadTimerRef.current);
+    }
     setDownloadStatus('idle');
     setActiveDownloadItem(null);
   }, []);
@@ -426,6 +556,7 @@ export function useApkDownload() {
     isLoadingApks,
     availableApks,
     activeDownloadItem,
+    totalDownloads,
     openApkPicker,
     closeApkPicker,
     downloadApkItem,

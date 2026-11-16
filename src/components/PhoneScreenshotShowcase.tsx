@@ -9,6 +9,7 @@ interface ScreenshotSlide {
   label: string;
   caption: string;
   src: string;
+  fallbackSources: string[];
 }
 
 const SCREENSHOT_SLIDES: ScreenshotSlide[] = [
@@ -17,22 +18,24 @@ const SCREENSHOT_SLIDES: ScreenshotSlide[] = [
     label: 'Beranda',
     caption: 'Lanjutkan Menonton, Episode Terbaru & navigasi Beranda, Cari, Jadwal, Pustaka',
     src: './screenshots/screen-1.jpg',
+    fallbackSources: ['./screenshots/screen-1.png', './screenshots/screen-1.webp'],
   },
   {
     id: 'detail',
     label: 'Detail',
     caption: 'Info lengkap AniList, hitung mundur episode baru & tombol Lanjut menonton',
     src: './screenshots/screen-2.jpg',
+    fallbackSources: ['./screenshots/screen-2.png', './screenshots/screen-2.webp'],
   },
   {
     id: 'player',
     label: 'Pemutar',
     caption: 'Pemutar HQ tanpa iklan ber-subtitle Indonesia & daftar episode lengkap',
     src: './screenshots/screen-3.jpg',
+    fallbackSources: ['./screenshots/screen-3.png', './screenshots/screen-3.webp'],
   },
 ];
 
-const TAB_TRANSITION_MS = 220;
 const SILKY_EASE = [0.16, 1, 0.3, 1] as const;
 
 function PhoneScreenSkeleton({ screen }: { screen: PhoneScreenTab }) {
@@ -137,12 +140,24 @@ export function PhoneScreenshotShowcase({
     [onScreenChange]
   );
 
-  const [isTabTransitioning, setIsTabTransitioning] = useState(false);
   const [loadedImageUrls, setLoadedImageUrls] = useState<Record<string, boolean>>({});
   const [hasScrolledPhone, setHasScrolledPhone] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const prevScreenRef = useRef<PhoneScreenTab>(activeScreen);
+
+  const markUrlReady = useCallback((url: string) => {
+    setLoadedImageUrls((prev) => (prev[url] ? prev : { ...prev, [url]: true }));
+  }, []);
+
+  useEffect(() => {
+    // Preload all screenshot slides for instant, flicker-free switching
+    SCREENSHOT_SLIDES.forEach((slide) => {
+      const img = new Image();
+      img.src = slide.src;
+      img.onload = () => markUrlReady(slide.src);
+    });
+  }, [markUrlReady]);
 
   useEffect(() => {
     setHasScrolledPhone(false);
@@ -152,25 +167,15 @@ export function PhoneScreenshotShowcase({
 
     if (prevScreenRef.current !== activeScreen) {
       prevScreenRef.current = activeScreen;
-      setIsTabTransitioning(true);
-      const timer = window.setTimeout(() => {
-        setIsTabTransitioning(false);
-      }, TAB_TRANSITION_MS);
-      return () => window.clearTimeout(timer);
     }
   }, [activeScreen]);
-
-  const markUrlReady = useCallback((url: string) => {
-    setLoadedImageUrls((prev) => (prev[url] ? prev : { ...prev, [url]: true }));
-  }, []);
 
   const currentIndex = Math.max(
     0,
     SCREENSHOT_SLIDES.findIndex((s) => s.id === activeScreen)
   );
   const currentSlide = SCREENSHOT_SLIDES[currentIndex];
-  const isImagePending = !loadedImageUrls[currentSlide.src];
-  const isScreenLoading = isTabTransitioning || isImagePending;
+  const isScreenLoading = !loadedImageUrls[currentSlide.src];
 
   const goPrev = () => {
     const prevIdx = (currentIndex - 1 + SCREENSHOT_SLIDES.length) % SCREENSHOT_SLIDES.length;
@@ -265,6 +270,7 @@ export function PhoneScreenshotShowcase({
               >
                 <ResilientImage
                   src={currentSlide.src}
+                  fallbackSources={currentSlide.fallbackSources}
                   alt={`Screenshot APK SoraStream - ${currentSlide.label}`}
                   className="w-full h-auto block"
                   fallbackLabel={currentSlide.label}

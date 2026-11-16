@@ -16,7 +16,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryS
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('NekoStream render error:', error, info);
+    console.error('SoraStream render error:', error, info);
   }
 
   render() {

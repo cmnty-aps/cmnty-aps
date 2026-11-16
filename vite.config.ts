@@ -36,7 +36,7 @@ function apkManifestPlugin(): Plugin {
     },
     load(id) {
       if (id !== resolvedId) return;
-      const publicDir = path.resolve(__dirname, 'public');
+      const publicDir = path.resolve(process.cwd(), 'public');
       const items: Array<{ fileName: string; size: number; url: string }> = [];
 
       try {
@@ -69,7 +69,7 @@ export default defineConfig(() => {
     plugins: [react(), tailwindcss(), apkManifestPlugin()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(process.cwd(), '.'),
       },
     },
     server: {

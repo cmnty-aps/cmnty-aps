@@ -3,6 +3,7 @@ import { Cat } from 'lucide-react';
 
 interface ResilientImageProps {
   src: string;
+  fallbackSources?: string[];
   alt: string;
   className?: string;
   fallbackLabel?: string;
@@ -12,24 +13,33 @@ interface ResilientImageProps {
 
 export function ResilientImage({
   src,
+  fallbackSources = [],
   alt,
   className = '',
   fallbackLabel,
   onLoad,
   onError,
 }: ResilientImageProps) {
+  const [candidateIndex, setCandidateIndex] = useState(0);
   const [hasError, setHasError] = useState(false);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const onLoadRef = useRef(onLoad);
   onLoadRef.current = onLoad;
 
+  const allSources = [src, ...fallbackSources];
+  const currentSrc = allSources[candidateIndex] || src;
+
   useEffect(() => {
+    setCandidateIndex(0);
     setHasError(false);
+  }, [src]);
+
+  useEffect(() => {
     const imgEl = imgRef.current;
     if (imgEl && imgEl.complete && imgEl.naturalWidth > 0) {
       onLoadRef.current?.();
     }
-  }, [src]);
+  }, [currentSrc]);
 
   if (hasError) {
     return (
@@ -49,13 +59,17 @@ export function ResilientImage({
   return (
     <img
       ref={imgRef}
-      src={src}
+      src={currentSrc}
       alt={alt}
       referrerPolicy="no-referrer"
       onLoad={() => onLoad?.()}
       onError={() => {
-        setHasError(true);
-        onError?.();
+        if (candidateIndex < allSources.length - 1) {
+          setCandidateIndex((prev) => prev + 1);
+        } else {
+          setHasError(true);
+          onError?.();
+        }
       }}
       className={className}
     />

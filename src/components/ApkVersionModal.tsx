@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Download, FileArchive, X } from 'lucide-react';
+import { Download, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { formatApkSize } from '../hooks/useApkDownload';
 import type { ApkVersionItem } from '../types/nekostream';
@@ -8,6 +8,7 @@ interface ApkVersionModalProps {
   isOpen: boolean;
   isLoading: boolean;
   apks: ApkVersionItem[];
+  totalDownloads?: string;
   onClose: () => void;
   onSelectApk: (item: ApkVersionItem) => void;
 }
@@ -18,6 +19,7 @@ export function ApkVersionModal({
   isOpen,
   isLoading,
   apks,
+  totalDownloads,
   onClose,
   onSelectApk,
 }: ApkVersionModalProps) {
@@ -62,8 +64,14 @@ export function ApkVersionModal({
                 >
                   Pilih Versi APK SoraStream
                 </h2>
-                <p className="text-xs text-[#6C587A] mt-0.5">
-                  Pilih versi aplikasi Android yang ingin diunduh.
+                <p className="text-xs text-[#6C587A] mt-0.5 flex items-center gap-1.5 flex-wrap">
+                  <span>Pilih versi aplikasi Android yang ingin diunduh</span>
+                  {totalDownloads && (
+                    <>
+                      <span className="text-[#C4B5CD]">·</span>
+                      <span className="font-semibold text-[#831843]">{totalDownloads}</span>
+                    </>
+                  )}
                 </p>
               </div>
               <button
@@ -119,9 +127,6 @@ export function ApkVersionModal({
                     className="w-full text-left rounded-2xl border border-[#E6D6F0] hover:border-[#EC4899]/60 bg-white hover:bg-[#FFF7FB] px-4 py-3.5 flex items-center justify-between gap-3 transition-colors group cursor-pointer focus-visible:outline-2 focus-visible:outline-[#7C3AED]"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-[#FDF2F8] border border-[#FBCFE8] flex items-center justify-center shrink-0 text-[#DB2777]">
-                        <FileArchive className="w-4 h-4" aria-hidden="true" />
-                      </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-editorial text-sm font-bold text-[#2B1D38] truncate">

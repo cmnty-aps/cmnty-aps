@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import {
   AnimatePresence,
@@ -22,7 +22,19 @@ export function TopBar({
   showDownloadButton,
 }: TopBarProps) {
   const [isScrolled, setIsScrolled] = useState(false);
+  const [appVersion, setAppVersion] = useState<string>('v1.0');
   const [dims, setDims] = useState({ trackW: 0, brandW: 0, navW: 0 });
+
+  useEffect(() => {
+    fetch('./version.json', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data.version === 'string') {
+          setAppVersion(data.version);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const trackRef = useRef<HTMLDivElement | null>(null);
   const brandRef = useRef<HTMLAnchorElement | null>(null);
@@ -104,12 +116,15 @@ export function TopBar({
             initial={false}
             animate={{
               x: brandTargetX,
-              opacity: hasMeasured ? 1 : 0,
+              opacity: 1,
             }}
             transition={{ duration: 0.55, ease: SILKY_EASE }}
-            className="absolute left-0 font-display text-base sm:text-xl font-extrabold tracking-tight text-[#2B1D38] whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#9333EA] rounded-sm will-change-transform"
+            className="absolute left-0 font-display text-base sm:text-xl font-extrabold tracking-tight text-[#2B1D38] whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#9333EA] rounded-sm will-change-transform flex items-center gap-2"
           >
-            SoraStream
+            <span>SoraStream</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-[#FBCFE8] text-[#831843] border border-[#F472B6]">
+              {appVersion}
+            </span>
           </motion.a>
 
           {/* Desktop Navigation Links: GPU-only translateX glide from right to center */}
@@ -119,7 +134,7 @@ export function TopBar({
             initial={false}
             animate={{
               x: navTargetX,
-              opacity: hasMeasured ? 1 : 0,
+              opacity: 1,
             }}
             transition={{ duration: 0.55, ease: SILKY_EASE }}
             className="hidden md:flex absolute left-0 items-center gap-6 lg:gap-8 text-sm font-medium text-[#5E4A6D] will-change-transform"

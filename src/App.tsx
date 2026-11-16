@@ -18,6 +18,7 @@ export default function App() {
     isLoadingApks,
     availableApks,
     activeDownloadItem,
+    totalDownloads,
     openApkPicker,
     closeApkPicker,
     downloadApkItem,
@@ -109,7 +110,7 @@ export default function App() {
                   initial={{ opacity: 0, x: -24 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.65, delay: 0.12, ease: SILKY_EASE }}
-                  className="pt-2 w-full flex justify-center lg:justify-start"
+                  className="pt-2 w-full flex flex-col items-center lg:items-start gap-2.5"
                 >
                   <motion.button
                     ref={heroCtaRef}
@@ -123,6 +124,17 @@ export default function App() {
                     <Download className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" aria-hidden="true" />
                     <span>Unduh SoraStream.apk</span>
                   </motion.button>
+
+                  <div className="flex items-center gap-2 text-xs text-[#6C587A]">
+                    <span className="inline-flex items-center gap-1.5 font-bold text-[#831843] bg-[#FCE7F3] px-2.5 py-0.5 rounded-full border border-[#FBCFE8]">
+                      <Download className="w-3.5 h-3.5 text-[#EC4899]" aria-hidden="true" />
+                      <span className="tabular-nums">{totalDownloads}</span>
+                    </span>
+                    <span className="text-[#C4B5CD]">·</span>
+                    <span className="font-medium">100% Gratis</span>
+                    <span className="text-[#C4B5CD]">·</span>
+                    <span className="font-medium">Bebas Iklan</span>
+                  </div>
                 </motion.div>
               </div>
 
@@ -139,6 +151,7 @@ export default function App() {
           isOpen={isPickerOpen}
           isLoading={isLoadingApks}
           apks={availableApks}
+          totalDownloads={totalDownloads}
           onClose={closeApkPicker}
           onSelectApk={downloadApkItem}
         />
