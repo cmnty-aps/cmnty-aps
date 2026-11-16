@@ -1,15 +1,29 @@
 import { useCallback, useRef, useState } from 'react';
-import type { DownloadStatus } from '../types/nekostream';
+import bundledApks from 'virtual:apk-files';
+import type { ApkVersionItem, DownloadStatus } from '../types/nekostream';
 
-export const APK_CANDIDATE_PATHS = ['./sorastream.apk', './SoraStream.apk'];
 export const APK_DOWNLOAD_FILENAME = 'SoraStream.apk';
 
 const MIN_VALID_APK_BYTES = 100 * 1024; // Real Android APKs are well above 100 KB
 const DEFAULT_GITHUB_REPO = 'cmnty-aps/cmnty-aps.github.io';
 
-interface ResolvedApk {
-  url: string;
-  isSameOrigin: boolean;
+const FALLBACK_CANDIDATE_FILES = [
+  'sorastream.apk',
+  'SoraStream.apk',
+  'sorastreamv1.apk',
+  'sorastreamv2.apk',
+  'sorastreamv3.apk',
+  'sorastreamv4.apk',
+  'sorastreamv5.apk',
+  'sorastream-v2.apk',
+  'sorastream-v3.apk',
+];
+
+interface GitHubContentItem {
+  name?: string;
+  size?: number;
+  type?: string;
+  download_url?: string;
 }
 
 interface GitHubAsset {
@@ -20,6 +34,8 @@ interface GitHubAsset {
 
 interface GitHubRelease {
   draft?: boolean;
+  tag_name?: string;
+  name?: string;
   assets?: GitHubAsset[];
 }
 
@@ -39,43 +55,124 @@ function getGitHubRepoSlug(): string {
   return DEFAULT_GITHUB_REPO;
 }
 
-async function hasValidApkHeader(path: string): Promise<boolean> {
-  const controller = new AbortController();
+function getGitHubPagesFileUrl(repoSlug: string, fileName: string): string | null {
+  const [owner, repo] = repoSlug.split('/');
+  if (!owner || !repo) return null;
+  const encodedFile = encodeURIComponent(fileName);
+  if (repo.toLowerCase() === `${owner.toLowerCase()}.github.io`) {
+    return `https://${owner}.github.io/${encodedFile}`;
+  }
+  return `https://${owner}.github.io/${repo}/${encodedFile}`;
+}
 
+function parseVersionParts(text: string): number[] {
+  const match = text.match(/v?(\d+(?:\.\d+)*)/i);
+  if (!match) return [0];
+  return match[1].split('.').map((n) => Number.parseInt(n, 10) || 0);
+}
+
+function compareVersionsDesc(a: ApkVersionItem, b: ApkVersionItem): number {
+  const len = Math.max(a.versionParts.length, b.versionParts.length);
+  for (let i = 0; i < len; i++) {
+    const av = a.versionParts[i] ?? 0;
+    const bv = b.versionParts[i] ?? 0;
+    if (bv !== av) return bv - av;
+  }
+  return a.fileName.localeCompare(b.fileName, 'id', { numeric: true });
+}
+
+function buildVersionLabel(fileName: string, releaseTag?: string): {
+  label: string;
+  versionParts: number[];
+} {
+  const baseName = fileName.replace(/\.apk$/i, '');
+  const fileVersionMatch = baseName.match(/v?(\d+(?:\.\d+)*)$/i);
+
+  if (fileVersionMatch) {
+    const verText = fileVersionMatch[1];
+    return {
+      label: `SoraStream v${verText}`,
+      versionParts: parseVersionParts(verText),
+    };
+  }
+
+  if (releaseTag) {
+    const cleanTag = releaseTag.replace(/^v/i, '');
+    return {
+      label: `SoraStream v${cleanTag}`,
+      versionParts: parseVersionParts(releaseTag),
+    };
+  }
+
+  return {
+    label: 'SoraStream',
+    versionParts: [0],
+  };
+}
+
+export function formatApkSize(bytes?: number): string {
+  if (!bytes || bytes <= 0) return '';
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1) {
+    return `${mb.toFixed(1)} MB`;
+  }
+  return `${Math.round(bytes / 1024)} KB`;
+}
+
+async function isRemoteBinaryAvailable(url: string): Promise<boolean> {
   try {
-    const response = await fetch(path, {
+    const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+    if (!res.ok) return false;
+    const type = (res.headers.get('content-type') || '').toLowerCase();
+    const len = res.headers.get('content-length');
+    if (type.includes('text/html') || type.includes('text/plain')) return false;
+    if (len !== null && Number(len) < MIN_VALID_APK_BYTES) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function probeLocalApkFile(fileName: string): Promise<ApkVersionItem | null> {
+  const path = `./${encodeURIComponent(fileName)}`;
+  try {
+    const head = await fetch(path, { method: 'HEAD', cache: 'no-store' });
+    if (head.ok) {
+      const type = (head.headers.get('content-type') || '').toLowerCase();
+      const lenHeader = head.headers.get('content-length');
+      if (type.includes('text/html') || type.includes('text/plain')) return null;
+      if (lenHeader !== null && Number(lenHeader) < MIN_VALID_APK_BYTES) return null;
+    } else if (head.status !== 405) {
+      return null;
+    }
+
+    const res = await fetch(path, {
       method: 'GET',
       headers: { Range: 'bytes=0-3' },
       cache: 'no-store',
-      signal: controller.signal,
     });
 
-    if (!response.ok && response.status !== 206) {
-      return false;
-    }
+    if (!res.ok && res.status !== 206) return null;
+    const type = (res.headers.get('content-type') || '').toLowerCase();
+    if (type.includes('text/html') || type.includes('text/plain')) return null;
 
-    const contentType = (response.headers.get('content-type') || '').toLowerCase();
-    if (contentType.includes('text/html') || contentType.includes('text/plain')) {
-      return false;
-    }
-
-    // Check total file size from Content-Range (for 206) or Content-Length (for 200)
-    const contentRange = response.headers.get('content-range');
+    let sizeBytes: number | undefined;
+    const contentRange = res.headers.get('content-range');
     if (contentRange) {
       const match = contentRange.match(/\/(\d+)$/);
-      if (match && Number(match[1]) < MIN_VALID_APK_BYTES) {
-        return false;
-      }
+      if (match) sizeBytes = Number(match[1]);
     } else {
-      const contentLength = response.headers.get('content-length');
-      if (contentLength && Number(contentLength) < MIN_VALID_APK_BYTES) {
-        return false;
-      }
+      const len = res.headers.get('content-length');
+      if (len) sizeBytes = Number(len);
     }
 
-    // Read only the first 4 bytes to verify APK/ZIP magic header (PK\x03\x04)
-    if (response.body) {
-      const reader = response.body.getReader();
+    if (typeof sizeBytes === 'number' && sizeBytes < MIN_VALID_APK_BYTES) {
+      return null;
+    }
+
+    let isZipHeader = false;
+    if (res.body) {
+      const reader = res.body.getReader();
       const collected: number[] = [];
       while (collected.length < 4) {
         const { done, value } = await reader.read();
@@ -85,130 +182,253 @@ async function hasValidApkHeader(path: string): Promise<boolean> {
         }
       }
       await reader.cancel().catch(() => {});
-      if (collected.length < 4) return false;
-      return (
+      isZipHeader =
+        collected.length >= 4 &&
         collected[0] === 0x50 &&
         collected[1] === 0x4b &&
         collected[2] === 0x03 &&
-        collected[3] === 0x04
-      );
+        collected[3] === 0x04;
+    } else {
+      const buf = new Uint8Array(await res.arrayBuffer());
+      isZipHeader =
+        buf.byteLength >= 4 &&
+        buf[0] === 0x50 &&
+        buf[1] === 0x4b &&
+        buf[2] === 0x03 &&
+        buf[3] === 0x04;
     }
 
-    const buffer = await response.arrayBuffer();
-    if (buffer.byteLength < 4) return false;
-    const bytes = new Uint8Array(buffer);
-    return bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
+    if (!isZipHeader) return null;
+
+    const { label, versionParts } = buildVersionLabel(fileName);
+    return {
+      id: `local-${fileName.toLowerCase()}`,
+      label,
+      fileName,
+      sizeBytes,
+      url: path,
+      isSameOrigin: true,
+      sourceLabel: `public/${fileName}`,
+      versionParts,
+    };
   } catch {
-    return false;
+    return null;
   }
 }
 
-async function resolveFromGitHubReleases(): Promise<string | null> {
-  const repoSlug = getGitHubRepoSlug();
+async function fetchGitHubPublicApks(repoSlug: string): Promise<ApkVersionItem[]> {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repoSlug}/contents/public`, {
+      cache: 'no-store',
+    });
+    if (!res.ok) return [];
+
+    const data: unknown = await res.json();
+    if (!Array.isArray(data)) return [];
+
+    const apkEntries = (data as GitHubContentItem[]).filter(
+      (entry): entry is Required<Pick<GitHubContentItem, 'name' | 'size'>> & GitHubContentItem =>
+        entry.type === 'file' &&
+        typeof entry.name === 'string' &&
+        entry.name.toLowerCase().endsWith('.apk') &&
+        typeof entry.size === 'number' &&
+        entry.size >= MIN_VALID_APK_BYTES
+    );
+
+    const resolved = await Promise.all(
+      apkEntries.map(async (entry): Promise<ApkVersionItem | null> => {
+        // 1. Check if this file actually exists as a real APK binary on the current origin
+        const localItem = await probeLocalApkFile(entry.name);
+        if (localItem) {
+          return localItem;
+        }
+
+        // 2. Otherwise resolve directly from GitHub Pages (application/vnd.android.package-archive)
+        //    or raw.githubusercontent.com so another host never serves an HTML SPA fallback
+        const pagesUrl = getGitHubPagesFileUrl(repoSlug, entry.name);
+        let remoteUrl: string | null = null;
+        if (pagesUrl && (await isRemoteBinaryAvailable(pagesUrl))) {
+          remoteUrl = pagesUrl;
+        } else if (typeof entry.download_url === 'string') {
+          remoteUrl = entry.download_url;
+        }
+
+        if (!remoteUrl) return null;
+
+        const { label, versionParts } = buildVersionLabel(entry.name);
+        return {
+          id: `public-${entry.name.toLowerCase()}`,
+          label,
+          fileName: entry.name,
+          sizeBytes: entry.size,
+          url: remoteUrl,
+          isSameOrigin: false,
+          sourceLabel: `public/${entry.name}`,
+          versionParts,
+        };
+      })
+    );
+
+    return resolved.filter((item): item is ApkVersionItem => item !== null);
+  } catch {
+    return [];
+  }
+}
+
+async function fetchGitHubReleaseApks(repoSlug: string): Promise<ApkVersionItem[]> {
   try {
     const res = await fetch(`https://api.github.com/repos/${repoSlug}/releases`, {
       cache: 'no-store',
     });
-    if (!res.ok) return null;
+    if (!res.ok) return [];
 
-    const releases: unknown = await res.json();
-    if (!Array.isArray(releases)) return null;
+    const data: unknown = await res.json();
+    if (!Array.isArray(data)) return [];
 
-    for (const release of releases as GitHubRelease[]) {
+    const items: ApkVersionItem[] = [];
+    for (const release of data as GitHubRelease[]) {
       if (release.draft || !Array.isArray(release.assets)) continue;
-      const apkAsset = release.assets.find(
-        (asset) =>
-          typeof asset.name === 'string' &&
-          asset.name.toLowerCase().endsWith('.apk') &&
-          typeof asset.size === 'number' &&
-          asset.size >= MIN_VALID_APK_BYTES &&
-          typeof asset.browser_download_url === 'string'
-      );
-      if (apkAsset?.browser_download_url) {
-        return apkAsset.browser_download_url;
+      for (const asset of release.assets) {
+        if (
+          typeof asset.name !== 'string' ||
+          !asset.name.toLowerCase().endsWith('.apk') ||
+          typeof asset.size !== 'number' ||
+          asset.size < MIN_VALID_APK_BYTES ||
+          typeof asset.browser_download_url !== 'string'
+        ) {
+          continue;
+        }
+
+        const { label, versionParts } = buildVersionLabel(asset.name, release.tag_name);
+        items.push({
+          id: `release-${release.tag_name || ''}-${asset.name.toLowerCase()}`,
+          label,
+          fileName: asset.name,
+          sizeBytes: asset.size,
+          url: asset.browser_download_url,
+          isSameOrigin: false,
+          sourceLabel: release.tag_name ? `GitHub Release · ${release.tag_name}` : 'GitHub Release',
+          versionParts,
+        });
       }
     }
+    return items;
   } catch {
-    // Ignore network / rate-limit errors
+    return [];
   }
-  return null;
 }
 
 export function useApkDownload() {
   const [downloadStatus, setDownloadStatus] = useState<DownloadStatus>('idle');
-  const isCheckingRef = useRef(false);
+  const [isPickerOpen, setIsPickerOpen] = useState<boolean>(false);
+  const [isLoadingApks, setIsLoadingApks] = useState<boolean>(false);
+  const [availableApks, setAvailableApks] = useState<ApkVersionItem[]>([]);
+  const [activeDownloadItem, setActiveDownloadItem] = useState<ApkVersionItem | null>(null);
+  const isFetchingRef = useRef(false);
 
-  const resolveApk = useCallback(async (): Promise<ResolvedApk | null> => {
-    for (const path of APK_CANDIDATE_PATHS) {
-      try {
-        const head = await fetch(path, { method: 'HEAD', cache: 'no-store' });
-        if (head.ok) {
-          const type = (head.headers.get('content-type') || '').toLowerCase();
-          const lenHeader = head.headers.get('content-length');
-          if (type.includes('text/html') || type.includes('text/plain')) {
-            continue;
-          }
-          if (lenHeader !== null && Number(lenHeader) < MIN_VALID_APK_BYTES) {
-            continue;
-          }
-        } else if (head.status !== 405) {
-          continue;
-        }
-
-        const isValidBinary = await hasValidApkHeader(path);
-        if (isValidBinary) {
-          return { url: path, isSameOrigin: true };
-        }
-      } catch {
-        // Try next candidate
-      }
-    }
-
-    const releaseUrl = await resolveFromGitHubReleases();
-    if (releaseUrl) {
-      return { url: releaseUrl, isSameOrigin: false };
-    }
-
-    return null;
-  }, []);
-
-  const triggerApkDownload = useCallback(async () => {
-    if (isCheckingRef.current) return false;
-    isCheckingRef.current = true;
-    setDownloadStatus('checking');
+  const loadAvailableApks = useCallback(async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    setIsLoadingApks(true);
 
     try {
-      const resolved = await resolveApk();
+      const repoSlug = getGitHubRepoSlug();
+      const mapByFile = new Map<string, ApkVersionItem>();
 
-      if (!resolved) {
-        setDownloadStatus('missing-file');
-        return false;
+      // 1. Build-time / dev-time scanned public/*.apk files
+      for (const bundled of bundledApks) {
+        const { label, versionParts } = buildVersionLabel(bundled.fileName);
+        mapByFile.set(bundled.fileName.toLowerCase(), {
+          id: `bundled-${bundled.fileName.toLowerCase()}`,
+          label,
+          fileName: bundled.fileName,
+          sizeBytes: bundled.size,
+          url: bundled.url,
+          isSameOrigin: true,
+          sourceLabel: `public/${bundled.fileName}`,
+          versionParts,
+        });
       }
 
-      const link = document.createElement('a');
-      link.href = resolved.url;
-      if (resolved.isSameOrigin) {
-        link.setAttribute('download', APK_DOWNLOAD_FILENAME);
-      }
-      link.rel = 'noopener';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // 2. Live GitHub public/ contents + GitHub Releases in parallel
+      const [ghPublic, ghReleases] = await Promise.all([
+        fetchGitHubPublicApks(repoSlug),
+        fetchGitHubReleaseApks(repoSlug),
+      ]);
 
-      setDownloadStatus('started');
-      return true;
+      for (const item of ghPublic) {
+        const key = item.fileName.toLowerCase();
+        if (!mapByFile.has(key)) {
+          mapByFile.set(key, item);
+        }
+      }
+
+      for (const item of ghReleases) {
+        const key = item.fileName.toLowerCase();
+        if (!mapByFile.has(key)) {
+          mapByFile.set(key, item);
+        }
+      }
+
+      // 3. Fallback static probing if nothing was found via manifest or GitHub API
+      if (mapByFile.size === 0) {
+        const probed = await Promise.all(
+          FALLBACK_CANDIDATE_FILES.map((name) => probeLocalApkFile(name))
+        );
+        for (const item of probed) {
+          if (item) {
+            mapByFile.set(item.fileName.toLowerCase(), item);
+          }
+        }
+      }
+
+      const sorted = Array.from(mapByFile.values()).sort(compareVersionsDesc);
+      setAvailableApks(sorted);
     } finally {
-      isCheckingRef.current = false;
+      isFetchingRef.current = false;
+      setIsLoadingApks(false);
     }
-  }, [resolveApk]);
+  }, []);
+
+  const openApkPicker = useCallback(() => {
+    setIsPickerOpen(true);
+    void loadAvailableApks();
+  }, [loadAvailableApks]);
+
+  const closeApkPicker = useCallback(() => {
+    setIsPickerOpen(false);
+  }, []);
+
+  const downloadApkItem = useCallback((item: ApkVersionItem) => {
+    const link = document.createElement('a');
+    link.href = item.url;
+    if (item.isSameOrigin) {
+      link.setAttribute('download', item.fileName || APK_DOWNLOAD_FILENAME);
+    }
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setActiveDownloadItem(item);
+    setIsPickerOpen(false);
+    setDownloadStatus('started');
+  }, []);
 
   const resetDownloadStatus = useCallback(() => {
     setDownloadStatus('idle');
+    setActiveDownloadItem(null);
   }, []);
 
   return {
     downloadStatus,
-    triggerApkDownload,
+    isPickerOpen,
+    isLoadingApks,
+    availableApks,
+    activeDownloadItem,
+    openApkPicker,
+    closeApkPicker,
+    downloadApkItem,
     resetDownloadStatus,
   };
 }

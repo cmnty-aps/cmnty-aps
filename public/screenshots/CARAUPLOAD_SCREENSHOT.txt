@@ -1,14 +1,9 @@
 TARUH SCREENSHOT APK DI SINI
 ============================
 
-Unggah screenshot aplikasi Android NekoStream Anda ke folder ini
+Unggah screenshot aplikasi Android SoraStream Anda ke folder ini
 dengan nama file berikut:
 
-- public/screenshots/screen-1.png  (Tampilan Beranda / Pencarian AniList)
-- public/screenshots/screen-2.png  (Tampilan Detail Anime)
-- public/screenshots/screen-3.png  (Tampilan Pemutar Episode)
-
-Catatan:
-- Format .png atau .jpg (rasio vertikal HP, misal 9:19 atau 9:16).
-- Setelah file ditaruh di folder ini, frame HP di landing page akan
-  otomatis menampilkan screenshot asli APK Anda.
+- public/screenshots/screen-1.jpg  (Tampilan Beranda & Riwayat)
+- public/screenshots/screen-2.jpg  (Tampilan Detail Anime)
+- public/screenshots/screen-3.jpg  (Tampilan Pemutar Episode)
