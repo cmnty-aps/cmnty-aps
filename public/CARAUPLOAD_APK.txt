@@ -1,0 +1,13 @@
+PANDUAN UPLOAD FILE APK NEKOSTREAM
+===================================
+
+1. Siapkan file APK Android aplikasi NekoStream Anda.
+2. Ubah nama file menjadi: nekostream.apk
+3. Taruh file nekostream.apk langsung di dalam folder public/ ini
+   sehingga path-nya menjadi:
+
+   public/nekostream.apk
+
+4. Setelah file berada di sini, tombol "Unduh APK" di landing page
+   akan otomatis mendeteksi dan mengunduh file /nekostream.apk
+   sebagai NekoStream.apk.

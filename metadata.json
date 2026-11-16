@@ -1,0 +1,6 @@
+{
+  "name": "SoraStream — Unduh APK Streaming Anime Android",
+  "description": "Landing page unduh APK SoraStream tanpa iklan dengan data anime dari AniList dan pencocokan judul otomatis ke scraper episode sub Indo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
