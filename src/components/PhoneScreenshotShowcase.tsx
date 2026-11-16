@@ -26,19 +26,19 @@ const SCREENSHOT_SLIDES: ScreenshotSlide[] = [
     id: 'home',
     label: 'Beranda',
     caption: 'Lanjutkan Menonton, Episode Terbaru & navigasi Beranda, Cari, Jadwal, Pustaka',
-    candidates: ['/screenshots/screen-1.png', '/screenshots/screen-1.jpg'],
+    candidates: ['./screenshots/screen-1.png', './screenshots/screen-1.jpg'],
   },
   {
     id: 'detail',
     label: 'Detail',
     caption: 'Info lengkap AniList, hitung mundur episode baru & tombol Lanjut menonton',
-    candidates: ['/screenshots/screen-2.png', '/screenshots/screen-2.jpg'],
+    candidates: ['./screenshots/screen-2.png', './screenshots/screen-2.jpg'],
   },
   {
     id: 'player',
     label: 'Pemutar',
     caption: 'Pemutar HQ tanpa iklan ber-subtitle Indonesia & daftar episode lengkap',
-    candidates: ['/screenshots/screen-3.png', '/screenshots/screen-3.jpg'],
+    candidates: ['./screenshots/screen-3.png', './screenshots/screen-3.jpg'],
   },
 ];
 

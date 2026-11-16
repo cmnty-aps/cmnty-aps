@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import type { DownloadStatus } from '../types/nekostream';
 
-export const APK_CANDIDATE_PATHS = ['/sorastream.apk', '/nekostream.apk'];
+export const APK_CANDIDATE_PATHS = ['./sorastream.apk', './nekostream.apk'];
 export const APK_DOWNLOAD_FILENAME = 'SoraStream.apk';
 
 export function useApkDownload() {

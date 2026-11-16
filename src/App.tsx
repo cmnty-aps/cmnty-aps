@@ -119,83 +119,6 @@ export default function App() {
                     </span>
                   </motion.button>
                 </motion.div>
-
-                {/* Animated Inline Download Status */}
-                <AnimatePresence mode="wait">
-                  {downloadStatus === 'started' && (
-                    <motion.div
-                      key="hero-status-started"
-                      role="status"
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      transition={{ duration: 0.25, ease: SILKY_EASE }}
-                      className="w-full text-left rounded-2xl p-4 bg-[#F5F3FF] border border-[#DDD6FE] flex items-start justify-between gap-3"
-                    >
-                      <div className="flex items-start gap-3">
-                        <CheckCircle2
-                          className="w-5 h-5 text-[#7C3AED] shrink-0 mt-0.5"
-                          aria-hidden="true"
-                        />
-                        <div className="text-sm">
-                          <p className="font-bold text-[#2B1D38]">
-                            Unduhan SoraStream.apk dimulai!
-                          </p>
-                          <p className="text-xs text-[#6C587A] mt-0.5">
-                            Buka berkas hasil unduhan di perangkat Android Anda untuk memasang
-                            aplikasi.
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={resetDownloadStatus}
-                        aria-label="Tutup pemberitahuan"
-                        className="text-[#6C587A] hover:text-[#2B1D38] p-1 cursor-pointer"
-                      >
-                        <X className="w-4 h-4" aria-hidden="true" />
-                      </button>
-                    </motion.div>
-                  )}
-
-                  {downloadStatus === 'missing-file' && (
-                    <motion.div
-                      key="hero-status-missing"
-                      role="alert"
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      transition={{ duration: 0.25, ease: SILKY_EASE }}
-                      className="w-full text-left rounded-2xl p-4 bg-[#FFF1F6] border border-[#FBCFE8] flex items-start justify-between gap-3"
-                    >
-                      <div className="flex items-start gap-3">
-                        <AlertCircle
-                          className="w-5 h-5 text-[#DB2777] shrink-0 mt-0.5"
-                          aria-hidden="true"
-                        />
-                        <div className="text-sm">
-                          <p className="font-bold text-[#831843]">
-                            File <code className="font-mono">public/sorastream.apk</code> belum
-                            tersedia.
-                          </p>
-                          <p className="text-xs text-[#6C587A] mt-0.5">
-                            Unggah file APK Anda ke folder <code className="font-mono">public/</code>{' '}
-                            dengan nama <code className="font-mono">sorastream.apk</code> agar
-                            unduhan otomatis berjalan.
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={resetDownloadStatus}
-                        aria-label="Tutup pemberitahuan"
-                        className="text-[#831843] hover:text-[#2B1D38] p-1 cursor-pointer"
-                      >
-                        <X className="w-4 h-4" aria-hidden="true" />
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
               </div>
 
               {/* Right Column: Scrollable Smartphone Showcase */}
@@ -209,9 +132,9 @@ export default function App() {
           <FeatureBento />
         </main>
 
-        {/* Floating Download Toast when Header CTA is triggered while scrolled */}
+        {/* Floating Download Popup Toast */}
         <AnimatePresence>
-          {showHeaderCta && (downloadStatus === 'started' || downloadStatus === 'missing-file') && (
+          {(downloadStatus === 'started' || downloadStatus === 'missing-file') && (
             <motion.div
               key={`floating-${downloadStatus}`}
               role={downloadStatus === 'started' ? 'status' : 'alert'}
@@ -244,7 +167,7 @@ export default function App() {
                     }`}
                   >
                     {downloadStatus === 'started'
-                      ? 'Unduhan SoraStream.apk dimulai!'
+                      ? 'Mengunduh apk'
                       : 'File sorastream.apk belum tersedia.'}
                   </p>
                   <p className="text-xs text-[#6C587A] mt-0.5">

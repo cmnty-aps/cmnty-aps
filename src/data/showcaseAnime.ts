@@ -34,8 +34,8 @@ export const SHOWCASE_ANIME_LIST: ShowcaseAnime[] = [
     source: 'Light Novel',
     season: 'Fall 2026',
     releaseDate: '6 Okt 2026',
-    poster: '/screenshots/screen-2.jpg',
-    banner: '/screenshots/screen-3.jpg',
+    poster: './screenshots/screen-2.jpg',
+    banner: './screenshots/screen-3.jpg',
   },
   {
     id: 'overgeared',
@@ -53,8 +53,8 @@ export const SHOWCASE_ANIME_LIST: ShowcaseAnime[] = [
     source: 'Web Novel',
     season: 'Fall 2026',
     releaseDate: '12 Okt 2026',
-    poster: '/screenshots/screen-1.jpg',
-    banner: '/screenshots/screen-1.jpg',
+    poster: './screenshots/screen-1.jpg',
+    banner: './screenshots/screen-1.jpg',
   },
   {
     id: 'dark-summoner',
@@ -72,7 +72,7 @@ export const SHOWCASE_ANIME_LIST: ShowcaseAnime[] = [
     source: 'Manga',
     season: 'Fall 2026',
     releaseDate: '15 Okt 2026',
-    poster: '/screenshots/screen-1.jpg',
-    banner: '/screenshots/screen-1.jpg',
+    poster: './screenshots/screen-1.jpg',
+    banner: './screenshots/screen-1.jpg',
   },
 ];
