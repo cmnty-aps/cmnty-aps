@@ -1,9 +1,0 @@
-TARUH SCREENSHOT APK DI SINI
-============================
-
-Unggah screenshot aplikasi Android SoraStream Anda ke folder ini
-dengan nama file berikut:
-
-- public/screenshots/screen-1.jpg  (Tampilan Beranda & Riwayat)
-- public/screenshots/screen-2.jpg  (Tampilan Detail Anime)
-- public/screenshots/screen-3.jpg  (Tampilan Pemutar Episode)
