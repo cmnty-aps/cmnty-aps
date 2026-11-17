@@ -5,7 +5,7 @@ import type { ApkVersionItem, DownloadStatus } from '../types/nekostream';
 export const APK_DOWNLOAD_FILENAME = 'SoraStream.apk';
 
 const MIN_VALID_APK_BYTES = 100 * 1024; // Real Android APKs are well above 100 KB
-const VERSION_COUNTS_CACHE_KEY = 'sorastream_version_download_counts';
+const COUNTAPI_BASE_URL = 'https://countapi.mileshilliard.com/api/v1';
 
 interface GitHubContentItem {
   name?: string;
@@ -19,7 +19,6 @@ interface GitHubAsset {
   size?: number;
   url?: string;
   browser_download_url?: string;
-  download_count?: number;
   id?: number;
 }
 
@@ -38,6 +37,11 @@ export interface RepoConfigInfo {
   hasGitHubToken: boolean;
 }
 
+function isStaticGitHubPages(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.location.hostname.endsWith('.github.io');
+}
+
 function parseRepoFromUrl(repoUrl: string): { owner: string; repo: string } {
   if (!repoUrl) return { owner: '', repo: '' };
   const cleaned = repoUrl
@@ -52,25 +56,51 @@ function parseRepoFromUrl(repoUrl: string): { owner: string; repo: string } {
   return { owner: '', repo: '' };
 }
 
-function getStoredVersionCounts(): Record<string, number> {
-  if (typeof window === 'undefined') return {};
-  try {
-    const raw = localStorage.getItem(VERSION_COUNTS_CACHE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // Ignore
-  }
-  return {};
+function buildVersionCountApiKey(owner: string, repo: string, itemId: string): string {
+  const raw = owner && repo ? `sorastream-${owner}-${repo}-${itemId}` : `sorastream-cmnty-${itemId}`;
+  return raw
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 64);
 }
 
-function saveStoredVersionCount(id: string, count: number) {
-  if (typeof window === 'undefined') return;
+function formatTotalDownloads(val: number): string {
+  return val >= 1000
+    ? `${val.toLocaleString('id-ID')}+ Unduhan`
+    : `${val.toLocaleString('id-ID')} Unduhan`;
+}
+
+function computeTotalDownloadsText(items: ApkVersionItem[]): string {
+  const total = items.reduce((sum, item) => sum + (item.downloadCount ?? 0), 0);
+  return formatTotalDownloads(total);
+}
+
+async function fetchCountApiGet(key: string): Promise<number | null> {
   try {
-    const counts = getStoredVersionCounts();
-    counts[id] = count;
-    localStorage.setItem(VERSION_COUNTS_CACHE_KEY, JSON.stringify(counts));
+    const res = await fetch(`${COUNTAPI_BASE_URL}/get/${encodeURIComponent(key)}`, {
+      cache: 'no-store',
+    });
+    if (res.status === 404) return 0;
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data?.value === 'number' ? data.value : null;
   } catch {
-    // Ignore
+    return null;
+  }
+}
+
+async function fetchCountApiHit(key: string): Promise<number | null> {
+  try {
+    const res = await fetch(`${COUNTAPI_BASE_URL}/hit/${encodeURIComponent(key)}`, {
+      cache: 'no-store',
+      keepalive: true,
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data?.value === 'number' ? data.value : null;
+  } catch {
+    return null;
   }
 }
 
@@ -142,9 +172,10 @@ export function formatApkSize(bytes?: number): string {
 
 function mapReleasesToItems(
   releases: GitHubRelease[],
-  useProxyDownload: boolean
+  useProxyDownload: boolean,
+  owner: string,
+  repo: string
 ): ApkVersionItem[] {
-  const storedCounts = getStoredVersionCounts();
   const items: ApkVersionItem[] = [];
 
   for (const release of releases) {
@@ -170,8 +201,7 @@ function mapReleasesToItems(
           : rawDownloadTarget;
 
       const id = `release-${release.tag_name || ''}-${asset.name.toLowerCase()}`;
-      const realGitHubCount = typeof asset.download_count === 'number' ? asset.download_count : 0;
-      const downloadCount = storedCounts[id] ?? realGitHubCount;
+      const countApiKey = buildVersionCountApiKey(owner, repo, id);
 
       items.push({
         id,
@@ -182,12 +212,30 @@ function mapReleasesToItems(
         isSameOrigin: isStaticLocal,
         sourceLabel: release.tag_name ? `GitHub Release · ${release.tag_name}` : 'GitHub Release',
         versionParts,
-        downloadCount,
+        downloadCount: 0,
+        baseDownloadCount: 0,
+        countApiKey,
       });
     }
   }
 
   return items;
+}
+
+async function fetchStaticReleaseManifest(): Promise<GitHubRelease[] | null> {
+  try {
+    const manifestRes = await fetch('./releases-manifest.json', { cache: 'no-store' });
+    if (!manifestRes.ok) return null;
+    const contentType = (manifestRes.headers.get('content-type') || '').toLowerCase();
+    if (!contentType.includes('application/json') && !contentType.includes('text/plain')) {
+      return null;
+    }
+    const manifestData: unknown = await manifestRes.json();
+    if (!Array.isArray(manifestData)) return null;
+    return manifestData as GitHubRelease[];
+  } catch {
+    return null;
+  }
 }
 
 async function fetchGitHubReleaseApks(
@@ -201,38 +249,13 @@ async function fetchGitHubReleaseApks(
     };
   }
 
-  try {
-    const endpoint = `/api/github/releases?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`;
-    const res = await fetch(endpoint, { cache: 'no-store' });
-
-    if (res.ok) {
-      const data: unknown = await res.json();
-      if (!Array.isArray(data)) {
-        return { items: [], error: null };
-      }
-      return {
-        items: mapReleasesToItems(data as GitHubRelease[], true),
-        error: null,
-      };
+  if (isStaticGitHubPages()) {
+    const staticReleases = await fetchStaticReleaseManifest();
+    if (staticReleases && staticReleases.length > 0) {
+      return { items: mapReleasesToItems(staticReleases, false, owner, repo), error: null };
     }
 
-    // If running as static site (GitHub Pages) without Express backend, try static manifest built by Actions
-    if (res.status === 404) {
-      try {
-        const manifestRes = await fetch('./releases-manifest.json', { cache: 'no-store' });
-        if (manifestRes.ok) {
-          const manifestData: unknown = await manifestRes.json();
-          if (Array.isArray(manifestData)) {
-            return {
-              items: mapReleasesToItems(manifestData as GitHubRelease[], false),
-              error: null,
-            };
-          }
-        }
-      } catch {
-        // Fallback to direct public GitHub API if repo is public
-      }
-
+    try {
       const publicRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases`, {
         cache: 'no-store',
       });
@@ -240,10 +263,60 @@ async function fetchGitHubReleaseApks(
         const publicData: unknown = await publicRes.json();
         if (Array.isArray(publicData)) {
           return {
-            items: mapReleasesToItems(publicData as GitHubRelease[], false),
+            items: mapReleasesToItems(publicData as GitHubRelease[], false, owner, repo),
             error: null,
           };
         }
+      }
+    } catch {
+      // Ignore
+    }
+
+    return {
+      items: [],
+      error:
+        'Rilis APK belum tersinkron. Pastikan secret CUSTOM_GH_TOKEN sudah diisi di Settings → Secrets → Actions dan workflow GitHub Pages sudah dijalankan.',
+    };
+  }
+
+  try {
+    const endpoint = `/api/github/releases?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`;
+    const res = await fetch(endpoint, { cache: 'no-store' });
+
+    if (res.ok) {
+      const contentType = (res.headers.get('content-type') || '').toLowerCase();
+      if (contentType.includes('application/json')) {
+        const data: unknown = await res.json();
+        if (Array.isArray(data)) {
+          return {
+            items: mapReleasesToItems(data as GitHubRelease[], true, owner, repo),
+            error: null,
+          };
+        }
+      }
+    }
+
+    const staticReleases = await fetchStaticReleaseManifest();
+    if (staticReleases && staticReleases.length > 0) {
+      return { items: mapReleasesToItems(staticReleases, false, owner, repo), error: null };
+    }
+
+    if (res.status === 404 || res.status === 502 || res.status === 503) {
+      try {
+        const publicRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases`, {
+          cache: 'no-store',
+        });
+        if (publicRes.ok) {
+          const publicData: unknown = await publicRes.json();
+          if (Array.isArray(publicData)) {
+            return {
+              items: mapReleasesToItems(publicData as GitHubRelease[], false, owner, repo),
+              error: null,
+            };
+          }
+        }
+      } catch {
+        // Ignore
       }
     }
 
@@ -265,6 +338,11 @@ async function fetchGitHubReleaseApks(
 
     return { items: [], error: errMessage };
   } catch {
+    const staticReleases = await fetchStaticReleaseManifest();
+    if (staticReleases && staticReleases.length > 0) {
+      return { items: mapReleasesToItems(staticReleases, false, owner, repo), error: null };
+    }
+
     return {
       items: [],
       error: 'Tidak dapat terhubung ke server untuk mengambil daftar rilis.',
@@ -273,11 +351,14 @@ async function fetchGitHubReleaseApks(
 }
 
 async function fetchGitHubPublicApks(owner: string, repo: string): Promise<ApkVersionItem[]> {
-  if (!owner || !repo) return [];
+  if (!owner || !repo || isStaticGitHubPages()) return [];
   try {
     const endpoint = `/api/github/contents?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}&path=public`;
     const res = await fetch(endpoint, { cache: 'no-store' });
     if (!res.ok) return [];
+
+    const contentType = (res.headers.get('content-type') || '').toLowerCase();
+    if (!contentType.includes('application/json')) return [];
 
     const data: unknown = await res.json();
     if (!Array.isArray(data)) return [];
@@ -291,14 +372,13 @@ async function fetchGitHubPublicApks(owner: string, repo: string): Promise<ApkVe
         entry.size >= MIN_VALID_APK_BYTES
     );
 
-    const storedCounts = getStoredVersionCounts();
     return apkEntries.map((entry): ApkVersionItem => {
       const remoteUrl =
         entry.download_url ||
         `https://raw.githubusercontent.com/${owner}/${repo}/main/public/${entry.name}`;
       const { label, versionParts } = buildVersionLabel(entry.name);
       const id = `public-${entry.name.toLowerCase()}`;
-      const downloadCount = storedCounts[id] ?? 0;
+      const countApiKey = buildVersionCountApiKey(owner, repo, id);
 
       return {
         id,
@@ -309,7 +389,9 @@ async function fetchGitHubPublicApks(owner: string, repo: string): Promise<ApkVe
         isSameOrigin: false,
         sourceLabel: `public/${entry.name}`,
         versionParts,
-        downloadCount,
+        downloadCount: 0,
+        baseDownloadCount: 0,
+        countApiKey,
       };
     });
   } catch {
@@ -317,7 +399,20 @@ async function fetchGitHubPublicApks(owner: string, repo: string): Promise<ApkVe
   }
 }
 
-const COUNT_CACHE_KEY = 'sorastream_download_count_cache';
+async function fetchLiveVersionCounts(items: ApkVersionItem[]): Promise<ApkVersionItem[]> {
+  return Promise.all(
+    items.map(async (item) => {
+      if (!item.countApiKey) return item;
+      const liveHits = await fetchCountApiGet(item.countApiKey);
+      if (liveHits === null) return item;
+
+      return {
+        ...item,
+        downloadCount: liveHits,
+      };
+    })
+  );
+}
 
 export function useApkDownload() {
   const [downloadStatus, setDownloadStatus] = useState<DownloadStatus>('idle');
@@ -326,6 +421,7 @@ export function useApkDownload() {
   const [availableApks, setAvailableApks] = useState<ApkVersionItem[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [activeDownloadItem, setActiveDownloadItem] = useState<ApkVersionItem | null>(null);
+  const [totalDownloads, setTotalDownloads] = useState<string>('0 Unduhan');
   const [repoConfig, setRepoConfig] = useState<RepoConfigInfo>({
     url: '',
     githubOwner: '',
@@ -334,31 +430,8 @@ export function useApkDownload() {
     hasGitHubToken: false,
   });
 
-  const [totalDownloads, setTotalDownloads] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem(COUNT_CACHE_KEY);
-        if (cached) return cached;
-      } catch {
-        // Ignore storage restrictions
-      }
-    }
-    return '0 Unduhan';
-  });
-
   const isFetchingRef = useRef(false);
   const downloadTimerRef = useRef<number | null>(null);
-
-  const updateCountState = useCallback((formatted: string) => {
-    setTotalDownloads(formatted);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(COUNT_CACHE_KEY, formatted);
-      } catch {
-        // Ignore storage restrictions
-      }
-    }
-  }, []);
 
   // Auto-dismiss floating toast notification after 6 seconds
   useEffect(() => {
@@ -378,72 +451,6 @@ export function useApkDownload() {
     };
   }, [downloadStatus]);
 
-  useEffect(() => {
-    fetch('/api/config', { cache: 'no-store' })
-      .then((res) => (res.ok ? res.json() : Promise.reject()))
-      .then((cfg) => {
-        if (cfg) {
-          setRepoConfig({
-            url: cfg.url || '',
-            githubOwner: cfg.githubOwner || '',
-            githubRepo: cfg.githubRepo || '',
-            useGitHubReleases: Boolean(cfg.useGitHubReleases ?? true),
-            hasGitHubToken: Boolean(cfg.hasGitHubToken),
-          });
-        }
-      })
-      .catch(() => {
-        fetch('./asset.json', { cache: 'no-store' })
-          .then((res) => (res.ok ? res.json() : null))
-          .then((assetCfg) => {
-            if (assetCfg && assetCfg.url) {
-              const { owner, repo } = parseRepoFromUrl(assetCfg.url);
-              setRepoConfig({
-                url: assetCfg.url,
-                githubOwner: owner,
-                githubRepo: repo,
-                useGitHubReleases: Boolean(assetCfg.useGitHubReleases ?? true),
-                hasGitHubToken: false,
-              });
-            }
-          })
-          .catch(() => {});
-      });
-
-    fetch('https://countapi.mileshilliard.com/api/v1/get/sorastream-cmnty-downloads', {
-      cache: 'no-store',
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && typeof data.value === 'number') {
-          const val = data.value;
-          const formatted =
-            val >= 1000
-              ? `${val.toLocaleString('id-ID')}+ Unduhan`
-              : `${val.toLocaleString('id-ID')} Unduhan`;
-          updateCountState(formatted);
-        } else {
-          return fetch('./version.json', { cache: 'no-store' })
-            .then((res) => res.json())
-            .then((vData) => {
-              if (vData && typeof vData.totalDownloads === 'string') {
-                updateCountState(vData.totalDownloads);
-              }
-            });
-        }
-      })
-      .catch(() => {
-        fetch('./version.json', { cache: 'no-store' })
-          .then((res) => res.json())
-          .then((vData) => {
-            if (vData && typeof vData.totalDownloads === 'string') {
-              updateCountState(vData.totalDownloads);
-            }
-          })
-          .catch(() => {});
-      });
-  }, [updateCountState]);
-
   const loadAvailableApks = useCallback(async () => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
@@ -455,19 +462,25 @@ export function useApkDownload() {
       let repo = repoConfig.githubRepo;
 
       try {
-        const cfgRes = await fetch('/api/config', { cache: 'no-store' });
-        if (cfgRes.ok) {
-          const cfgData = await cfgRes.json();
-          if (cfgData?.githubOwner) owner = cfgData.githubOwner;
-          if (cfgData?.githubRepo) repo = cfgData.githubRepo;
-          setRepoConfig({
-            url: cfgData?.url || '',
-            githubOwner: cfgData?.githubOwner || '',
-            githubRepo: cfgData?.githubRepo || '',
-            useGitHubReleases: Boolean(cfgData?.useGitHubReleases ?? true),
-            hasGitHubToken: Boolean(cfgData?.hasGitHubToken),
-          });
-        } else {
+        let loadedFromServer = false;
+        if (!isStaticGitHubPages()) {
+          const cfgRes = await fetch('/api/config', { cache: 'no-store' });
+          if (cfgRes.ok) {
+            const cfgData = await cfgRes.json();
+            if (cfgData?.githubOwner) owner = cfgData.githubOwner;
+            if (cfgData?.githubRepo) repo = cfgData.githubRepo;
+            setRepoConfig({
+              url: cfgData?.url || '',
+              githubOwner: cfgData?.githubOwner || '',
+              githubRepo: cfgData?.githubRepo || '',
+              useGitHubReleases: Boolean(cfgData?.useGitHubReleases ?? true),
+              hasGitHubToken: Boolean(cfgData?.hasGitHubToken),
+            });
+            loadedFromServer = true;
+          }
+        }
+
+        if (!loadedFromServer) {
           const assetRes = await fetch('./asset.json', { cache: 'no-store' });
           if (assetRes.ok) {
             const assetCfg = await assetRes.json();
@@ -475,6 +488,13 @@ export function useApkDownload() {
               const parsed = parseRepoFromUrl(assetCfg.url);
               owner = parsed.owner;
               repo = parsed.repo;
+              setRepoConfig({
+                url: assetCfg.url,
+                githubOwner: owner,
+                githubRepo: repo,
+                useGitHubReleases: Boolean(assetCfg.useGitHubReleases ?? true),
+                hasGitHubToken: false,
+              });
             }
           }
         }
@@ -483,12 +503,11 @@ export function useApkDownload() {
       }
 
       const mapById = new Map<string, ApkVersionItem>();
-      const storedCounts = getStoredVersionCounts();
 
       for (const bundled of bundledApks) {
         const { label, versionParts } = buildVersionLabel(bundled.fileName);
         const id = `bundled-${bundled.fileName.toLowerCase()}`;
-        const downloadCount = storedCounts[id] ?? 0;
+        const countApiKey = buildVersionCountApiKey(owner, repo, id);
 
         mapById.set(id, {
           id,
@@ -499,7 +518,9 @@ export function useApkDownload() {
           isSameOrigin: true,
           sourceLabel: `public/${bundled.fileName}`,
           versionParts,
-          downloadCount,
+          downloadCount: 0,
+          baseDownloadCount: 0,
+          countApiKey,
         });
       }
 
@@ -529,12 +550,52 @@ export function useApkDownload() {
       }
 
       const sorted = Array.from(mapById.values()).sort(compareVersionsDesc);
-      setAvailableApks(sorted);
+      if (sorted.length > 0) {
+        const liveItems = await fetchLiveVersionCounts(sorted);
+        setAvailableApks(liveItems);
+        setTotalDownloads(computeTotalDownloadsText(liveItems));
+      } else {
+        setAvailableApks([]);
+        setTotalDownloads('0 Unduhan');
+      }
     } finally {
       isFetchingRef.current = false;
       setIsLoadingApks(false);
     }
   }, [repoConfig.githubOwner, repoConfig.githubRepo]);
+
+  // Initial load & window focus real-time sync so Total Unduhan always equals sum of all versions
+  useEffect(() => {
+    void loadAvailableApks();
+
+    const handleFocus = () => {
+      void loadAvailableApks();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [loadAvailableApks]);
+
+  // Real-time polling while APK picker modal is open
+  useEffect(() => {
+    if (!isPickerOpen) return;
+
+    const refreshCounts = async () => {
+      setAvailableApks((prev) => {
+        if (prev.length === 0) return prev;
+        void fetchLiveVersionCounts(prev).then((updated) => {
+          setAvailableApks(updated);
+          setTotalDownloads(computeTotalDownloadsText(updated));
+        });
+        return prev;
+      });
+    };
+
+    const interval = window.setInterval(() => {
+      void refreshCounts();
+    }, 10000);
+
+    return () => window.clearInterval(interval);
+  }, [isPickerOpen]);
 
   const openApkPicker = useCallback(() => {
     setIsPickerOpen(true);
@@ -545,65 +606,35 @@ export function useApkDownload() {
     setIsPickerOpen(false);
   }, []);
 
-  const downloadApkItem = useCallback(
-    (item: ApkVersionItem) => {
-      const currentCount = item.downloadCount ?? 0;
-      const nextVersionCount = currentCount + 1;
-      saveStoredVersionCount(item.id, nextVersionCount);
-
-      setAvailableApks((prev) =>
-        prev.map((a) => (a.id === item.id ? { ...a, downloadCount: nextVersionCount } : a))
-      );
-
-      setTotalDownloads((prev) => {
-        const digits = parseInt(prev.replace(/\D/g, ''), 10) || 0;
-        const next = digits + 1;
-        const formatted =
-          next >= 1000
-            ? `${next.toLocaleString('id-ID')}+ Unduhan`
-            : `${next.toLocaleString('id-ID')} Unduhan`;
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem(COUNT_CACHE_KEY, formatted);
-          } catch {
-            // Ignore storage restrictions
-          }
+  const downloadApkItem = useCallback((item: ApkVersionItem) => {
+    if (item.countApiKey) {
+      void fetchCountApiHit(item.countApiKey).then((liveHits) => {
+        if (liveHits !== null) {
+          setAvailableApks((prev) => {
+            const updated = prev.map((a) =>
+              a.id === item.id ? { ...a, downloadCount: liveHits } : a
+            );
+            setTotalDownloads(computeTotalDownloadsText(updated));
+            return updated;
+          });
         }
-        return formatted;
       });
+    }
 
-      fetch('https://countapi.mileshilliard.com/api/v1/hit/sorastream-cmnty-downloads', {
-        cache: 'no-store',
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data && typeof data.value === 'number') {
-            const val = data.value;
-            const formatted =
-              val >= 1000
-                ? `${val.toLocaleString('id-ID')}+ Unduhan`
-                : `${val.toLocaleString('id-ID')} Unduhan`;
-            updateCountState(formatted);
-          }
-        })
-        .catch(() => {});
+    const link = document.createElement('a');
+    link.href = item.url;
+    if (item.isSameOrigin || item.url.startsWith('/api/github/download')) {
+      link.setAttribute('download', item.fileName || APK_DOWNLOAD_FILENAME);
+    }
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 
-      const link = document.createElement('a');
-      link.href = item.url;
-      if (item.isSameOrigin || item.url.startsWith('/api/github/download')) {
-        link.setAttribute('download', item.fileName || APK_DOWNLOAD_FILENAME);
-      }
-      link.rel = 'noopener';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      setActiveDownloadItem(item);
-      setIsPickerOpen(false);
-      setDownloadStatus('started');
-    },
-    [updateCountState]
-  );
+    setActiveDownloadItem(item);
+    setIsPickerOpen(false);
+    setDownloadStatus('started');
+  }, []);
 
   const resetDownloadStatus = useCallback(() => {
     if (downloadTimerRef.current) {

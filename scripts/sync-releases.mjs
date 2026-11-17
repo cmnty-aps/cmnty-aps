@@ -101,7 +101,6 @@ async function main() {
         syncedAssets.push({
           name: asset.name,
           size: asset.size,
-          download_count: asset.download_count ?? 0,
           browser_download_url: `./releases/${tag}/${safeName}`,
         });
         console.log(`Synced APK: ${tag}/${safeName}`);
