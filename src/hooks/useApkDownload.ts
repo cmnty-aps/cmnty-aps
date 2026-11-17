@@ -98,6 +98,24 @@ async function fetchGitHubReleaseApks(
       // Ignore
     }
 
+    try {
+      const manifestRes = await fetch('./releases-manifest.json', { cache: 'no-store' });
+      if (manifestRes.ok) {
+        const contentType = (manifestRes.headers.get('content-type') || '').toLowerCase();
+        if (contentType.includes('application/json')) {
+          const manifestData: unknown = await manifestRes.json();
+          if (Array.isArray(manifestData) && manifestData.length > 0) {
+            return {
+              items: mapReleasesToItems(manifestData as GitHubRelease[], false, owner, repo),
+              error: null,
+            };
+          }
+        }
+      }
+    } catch {
+      // Ignore
+    }
+
     return {
       items: [],
       error:
