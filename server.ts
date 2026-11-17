@@ -18,8 +18,8 @@ async function startServer() {
     if (!repoUrl) return { owner: '', repo: '' };
     const cleaned = repoUrl
       .trim()
+      .replace(/\/+$/, '')
       .replace(/\.git$/i, '')
-      .replace(/\/$/, '')
       .replace(/^https?:\/\/(www\.)?github\.com\//i, '');
     const parts = cleaned.split('/').filter(Boolean);
     if (parts.length >= 2) {
@@ -45,7 +45,7 @@ async function startServer() {
         };
       }
     } catch {
-      // fallback
+      // ignore invalid config
     }
     return {
       url: '',
@@ -92,17 +92,17 @@ async function startServer() {
     });
   });
 
-  // API endpoint to fetch real-time GitHub Releases
+  // API endpoint to fetch real-time GitHub Releases directly from GitHub API
   app.get('/api/github/releases', async (req, res) => {
+    const config = getConfig();
+    const owner = ((req.query.owner as string) || config.githubOwner).trim();
+    const repo = ((req.query.repo as string) || config.githubRepo).trim();
+
+    if (!owner || !repo) {
+      return res.status(400).json({ error: 'URL repository belum diatur di public/asset.json' });
+    }
+
     try {
-      const config = getConfig();
-      const owner = ((req.query.owner as string) || config.githubOwner).trim();
-      const repo = ((req.query.repo as string) || config.githubRepo).trim();
-
-      if (!owner || !repo) {
-        return res.status(400).json({ error: 'URL repository belum diatur di public/asset.json' });
-      }
-
       const token = getGitHubToken();
       const headers: Record<string, string> = {
         Accept: 'application/vnd.github+json',
@@ -113,29 +113,40 @@ async function startServer() {
         headers.Authorization = `Bearer ${token}`;
       }
 
-      const ghRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases`, {
-        headers,
-      });
+      const allReleases: unknown[] = [];
+      let page = 1;
 
-      if (!ghRes.ok) {
-        const errText = await ghRes.text();
-        return res.status(ghRes.status).json({
-          error: `GitHub API error: ${ghRes.status} ${ghRes.statusText}`,
-          details: errText,
-          repo: `${owner}/${repo}`,
-          hasToken: Boolean(token),
-        });
+      while (true) {
+        const ghRes = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/releases?per_page=100&page=${page}`,
+          { cache: 'no-store', headers }
+        );
+
+        if (!ghRes.ok) {
+          const errText = await ghRes.text();
+          return res.status(ghRes.status).json({
+            error: `GitHub API error: ${ghRes.status} ${ghRes.statusText}`,
+            details: errText,
+            repo: `${owner}/${repo}`,
+            hasToken: Boolean(token),
+          });
+        }
+
+        const pageData = await ghRes.json();
+        if (!Array.isArray(pageData)) break;
+        allReleases.push(...pageData);
+        if (pageData.length < 100) break;
+        page += 1;
       }
 
-      const data = await ghRes.json();
-      res.json(data);
+      return res.json(allReleases);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to fetch GitHub releases';
-      res.status(500).json({ error: message });
+      return res.status(500).json({ error: message });
     }
   });
 
-  // API endpoint to fetch GitHub repository contents
+  // API endpoint to fetch real-time GitHub repository contents
   app.get('/api/github/contents', async (req, res) => {
     try {
       const config = getConfig();
@@ -159,7 +170,7 @@ async function startServer() {
 
       const ghRes = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/contents/${folderPath}`,
-        { headers }
+        { cache: 'no-store', headers }
       );
 
       if (!ghRes.ok) {
@@ -216,7 +227,8 @@ async function startServer() {
           .json({ error: `Gagal mengunduh asset dari GitHub (${fetchRes.status})` });
       }
 
-      const safeFilename = path.basename(requestedFilename).replace(/[^a-zA-Z0-9._-]/g, '_') || 'SoraStream.apk';
+      const safeFilename =
+        path.basename(requestedFilename).replace(/[^a-zA-Z0-9._-]/g, '_') || 'SoraStream.apk';
       const contentType =
         fetchRes.headers.get('content-type') || 'application/vnd.android.package-archive';
       const contentLength = fetchRes.headers.get('content-length');
@@ -227,7 +239,10 @@ async function startServer() {
         res.setHeader('Content-Length', contentLength);
       }
 
-      await pipeline(Readable.fromWeb(fetchRes.body as unknown as import('stream/web').ReadableStream), res);
+      await pipeline(
+        Readable.fromWeb(fetchRes.body as unknown as import('stream/web').ReadableStream),
+        res
+      );
     } catch (err: unknown) {
       if (!res.headersSent) {
         const message = err instanceof Error ? err.message : 'Download proxy failed';

@@ -38,6 +38,7 @@ async function main() {
     process.env.GH_TOKEN ||
     process.env.SORA_GH_TOKEN ||
     process.env.PERSONAL_TOKEN ||
+    process.env.GITHUB_TOKEN ||
     ''
   )
     .trim()
@@ -51,7 +52,10 @@ async function main() {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases`, { headers });
+  const res = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/releases?per_page=100`,
+    { headers }
+  );
   if (!res.ok) {
     console.warn(`Warning: Failed to fetch releases (${res.status} ${res.statusText}).`);
     return;

@@ -20,6 +20,7 @@ export default function App() {
     fetchError,
     activeDownloadItem,
     totalDownloads,
+    latestVersion,
     openApkPicker,
     closeApkPicker,
     downloadApkItem,
@@ -77,6 +78,7 @@ export default function App() {
           onDownloadClick={openApkPicker}
           isChecking={false}
           showDownloadButton={showHeaderCta}
+          latestVersion={latestVersion}
         />
 
         <main className="flex-1">

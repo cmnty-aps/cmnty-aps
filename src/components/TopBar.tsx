@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import {
   AnimatePresence,
@@ -12,6 +12,7 @@ interface TopBarProps {
   onDownloadClick: () => void;
   isChecking: boolean;
   showDownloadButton: boolean;
+  latestVersion?: string;
 }
 
 const SILKY_EASE = [0.22, 1, 0.36, 1] as const;
@@ -20,21 +21,10 @@ export function TopBar({
   onDownloadClick,
   isChecking,
   showDownloadButton,
+  latestVersion,
 }: TopBarProps) {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [appVersion, setAppVersion] = useState<string>('v1.0');
   const [dims, setDims] = useState({ trackW: 0, brandW: 0, navW: 0 });
-
-  useEffect(() => {
-    fetch('./version.json', { cache: 'no-store' })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && typeof data.version === 'string') {
-          setAppVersion(data.version);
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   const trackRef = useRef<HTMLDivElement | null>(null);
   const brandRef = useRef<HTMLAnchorElement | null>(null);
@@ -122,9 +112,11 @@ export function TopBar({
             className="absolute left-0 font-display text-base sm:text-xl font-extrabold tracking-tight text-[#2B1D38] whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#9333EA] rounded-sm will-change-transform flex items-center gap-2"
           >
             <span>SoraStream</span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-[#FBCFE8] text-[#831843] border border-[#F472B6]">
-              {appVersion}
-            </span>
+            {latestVersion && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-[#FBCFE8] text-[#831843] border border-[#F472B6]">
+                {latestVersion}
+              </span>
+            )}
           </motion.a>
 
           {/* Desktop Navigation Links: GPU-only translateX glide from right to center */}
