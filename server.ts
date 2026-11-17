@@ -84,6 +84,7 @@ async function startServer() {
 
   // API endpoint for app config
   app.get('/api/config', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     const config = getConfig();
     const token = getGitHubToken();
     res.json({
@@ -94,6 +95,7 @@ async function startServer() {
 
   // API endpoint to fetch real-time GitHub Releases directly from GitHub API
   app.get('/api/github/releases', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     const config = getConfig();
     const owner = ((req.query.owner as string) || config.githubOwner).trim();
     const repo = ((req.query.repo as string) || config.githubRepo).trim();
@@ -148,6 +150,7 @@ async function startServer() {
 
   // API endpoint to fetch real-time GitHub repository contents
   app.get('/api/github/contents', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     try {
       const config = getConfig();
       const owner = ((req.query.owner as string) || config.githubOwner).trim();

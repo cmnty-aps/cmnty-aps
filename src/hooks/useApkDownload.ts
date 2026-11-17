@@ -99,7 +99,9 @@ async function fetchGitHubReleaseApks(
     }
 
     try {
-      const manifestRes = await fetch('./releases-manifest.json', { cache: 'no-store' });
+      const manifestRes = await fetch(`./releases-manifest.json?_t=${Date.now()}`, {
+        cache: 'no-store',
+      });
       if (manifestRes.ok) {
         const contentType = (manifestRes.headers.get('content-type') || '').toLowerCase();
         if (contentType.includes('application/json')) {
@@ -123,7 +125,7 @@ async function fetchGitHubReleaseApks(
   }
 
   try {
-    const endpoint = `/api/github/releases?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`;
+    const endpoint = `/api/github/releases?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}&_t=${Date.now()}`;
     const res = await fetch(endpoint, { cache: 'no-store' });
 
     if (res.ok) {
@@ -146,7 +148,10 @@ async function fetchGitHubReleaseApks(
         errMessage =
           'Token GitHub ditolak (401 Bad Credentials). Token mungkin kedaluwarsa, dicabut otomatis oleh GitHub, atau salah.';
       } else if (res.status === 404) {
-        errMessage = `Repository ${owner}/${repo} tidak ditemukan atau token belum diberi akses ke repo tersebut (404).`;
+        errMessage =
+          errBody?.hasToken === false
+            ? `Repository ${owner}/${repo} bersifat privat atau tidak ditemukan, dan GITHUB_TOKEN belum diatur di server (404).`
+            : `Repository ${owner}/${repo} tidak ditemukan atau token belum diberi akses ke repo tersebut (404).`;
       } else if (errBody?.error) {
         errMessage = errBody.error;
       }
@@ -271,7 +276,9 @@ export function useApkDownload() {
   const loadAvailableApks = useCallback(async () => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
-    setIsLoadingApks(true);
+    if (availableApksRef.current.length === 0) {
+      setIsLoadingApks(true);
+    }
     setFetchError(null);
 
     try {
@@ -281,7 +288,7 @@ export function useApkDownload() {
       try {
         let loadedFromServer = false;
         if (!isStaticGitHubPages()) {
-          const cfgRes = await fetch('/api/config', { cache: 'no-store' });
+          const cfgRes = await fetch(`/api/config?_t=${Date.now()}`, { cache: 'no-store' });
           if (cfgRes.ok) {
             const cfgData = await cfgRes.json();
             if (cfgData?.githubOwner) owner = cfgData.githubOwner;
@@ -298,7 +305,7 @@ export function useApkDownload() {
         }
 
         if (!loadedFromServer) {
-          const assetRes = await fetch('./asset.json', { cache: 'no-store' });
+          const assetRes = await fetch(`./asset.json?_t=${Date.now()}`, { cache: 'no-store' });
           if (assetRes.ok) {
             const assetCfg = await assetRes.json();
             if (assetCfg?.url) {
@@ -380,35 +387,45 @@ export function useApkDownload() {
     }
   }, []);
 
-  // Initial load & window focus real-time sync so Total Unduhan always equals sum of all versions
+  // Initial load, focus/visibility sync, and periodic background auto-update
   useEffect(() => {
     void loadAvailableApks();
 
     const handleFocus = () => {
       void loadAvailableApks();
     };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void loadAvailableApks();
+      }
+    };
+
     window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    const backgroundInterval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void loadAvailableApks();
+      }
+    }, 30000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearInterval(backgroundInterval);
+    };
   }, [loadAvailableApks]);
 
-  // Real-time polling while APK picker modal is open
+  // Real-time polling for both releases and download counts while APK picker modal is open
   useEffect(() => {
     if (!isPickerOpen) return;
 
-    const refreshCounts = async () => {
-      const current = availableApksRef.current;
-      if (current.length === 0) return;
-      const updated = await fetchLiveVersionCounts(current);
-      setAvailableApks(updated);
-      setTotalDownloads(computeTotalDownloadsText(updated));
-    };
-
     const interval = window.setInterval(() => {
-      void refreshCounts();
+      void loadAvailableApks();
     }, 10000);
 
     return () => window.clearInterval(interval);
-  }, [isPickerOpen]);
+  }, [isPickerOpen, loadAvailableApks]);
 
   const openApkPicker = useCallback(() => {
     setIsPickerOpen(true);

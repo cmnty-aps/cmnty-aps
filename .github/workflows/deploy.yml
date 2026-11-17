@@ -4,6 +4,10 @@ on:
   push:
     branches: ['main', 'master']
   workflow_dispatch:
+  repository_dispatch:
+    types: [release-updated]
+  schedule:
+    - cron: '*/15 * * * *'
 
 permissions:
   contents: read
