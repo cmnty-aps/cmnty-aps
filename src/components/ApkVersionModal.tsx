@@ -1,16 +1,15 @@
 import { useEffect } from 'react';
-import { Download, X } from 'lucide-react';
+import { AlertCircle, Download, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { formatApkSize } from '../hooks/useApkDownload';
 import type { ApkVersionItem } from '../types/nekostream';
-import type { RepoConfigInfo } from '../hooks/useApkDownload';
 
 interface ApkVersionModalProps {
   isOpen: boolean;
   isLoading: boolean;
   apks: ApkVersionItem[];
+  fetchError?: string | null;
   totalDownloads?: string;
-  repoConfig?: RepoConfigInfo;
   onClose: () => void;
   onSelectApk: (item: ApkVersionItem) => void;
 }
@@ -21,8 +20,8 @@ export function ApkVersionModal({
   isOpen,
   isLoading,
   apks,
+  fetchError,
   totalDownloads,
-  repoConfig,
   onClose,
   onSelectApk,
 }: ApkVersionModalProps) {
@@ -108,9 +107,16 @@ export function ApkVersionModal({
 
               {!isLoading && apks.length === 0 && (
                 <div className="rounded-2xl border border-[#FBCFE8] bg-[#FFF5F9] p-4 space-y-2 text-sm">
-                  <p className="font-bold text-[#831843]">Belum ada file APK yang tersedia.</p>
+                  <p className="font-bold text-[#831843] flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    <span>
+                      {fetchError ? 'Gagal memuat rilis APK' : 'Belum ada file APK yang tersedia.'}
+                    </span>
+                  </p>
                   <p className="text-xs text-[#6C587A] leading-relaxed">
-                    Pastikan URL repository GitHub telah diatur di <code className="font-mono text-[#500724]">public/asset.json</code> dan memiliki Release dengan asset <code className="font-mono text-[#500724]">.apk</code>.
+                    {fetchError
+                      ? fetchError
+                      : 'Pastikan URL repository GitHub telah diatur di public/asset.json dan memiliki Release dengan asset .apk.'}
                   </p>
                 </div>
               )}

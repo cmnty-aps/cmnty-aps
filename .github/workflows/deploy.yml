@@ -28,6 +28,13 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Build
         run: npm run build
+      - name: Sync Private Releases APK
+        env:
+          CUSTOM_GH_TOKEN: ${{ secrets.CUSTOM_GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          SORA_GH_TOKEN: ${{ secrets.SORA_GH_TOKEN }}
+          PERSONAL_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+        run: node scripts/sync-releases.mjs
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
