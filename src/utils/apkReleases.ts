@@ -32,8 +32,13 @@ export function parseRepoFromUrl(repoUrl: string): { owner: string; repo: string
   return { owner: '', repo: '' };
 }
 
+export const COUNTAPI_NAMESPACE = 'sorastream-v2';
+
 export function buildVersionCountApiKey(owner: string, repo: string, itemId: string): string {
-  const raw = owner && repo ? `sorastream-${owner}-${repo}-${itemId}` : `sorastream-cmnty-${itemId}`;
+  const raw =
+    owner && repo
+      ? `${COUNTAPI_NAMESPACE}-${owner}-${repo}-${itemId}`
+      : `${COUNTAPI_NAMESPACE}-cmnty-${itemId}`;
   return raw
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')

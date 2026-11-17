@@ -100,5 +100,5 @@ test('mapReleasesToItems and compareVersionsDesc put latest GitHub release first
     mapped[1].countApiKey,
     buildVersionCountApiKey('Creatorsitee', 'sv3-apk', 'release-v5-app-debug.apk')
   );
-  assert.equal(mapped[1].countApiKey, 'sorastream-creatorsitee-sv3-apk-release-v5-app-debug-apk');
+  assert.equal(mapped[1].countApiKey, 'sorastream-v2-creatorsitee-sv3-apk-release-v5-app-debug-apk');
 });

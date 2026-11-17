@@ -186,7 +186,6 @@ async function fetchGitHubPublicApks(owner: string, repo: string): Promise<ApkVe
         sourceLabel: `public/${entry.name}`,
         versionParts,
         downloadCount: 0,
-        baseDownloadCount: 0,
         countApiKey,
       };
     });
@@ -320,7 +319,6 @@ export function useApkDownload() {
           sourceLabel: `public/${bundled.fileName}`,
           versionParts,
           downloadCount: 0,
-          baseDownloadCount: 0,
           countApiKey,
         });
       }

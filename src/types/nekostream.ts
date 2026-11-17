@@ -12,6 +12,5 @@ export interface ApkVersionItem {
   sourceLabel: string;
   versionParts: number[];
   downloadCount?: number;
-  baseDownloadCount?: number;
   countApiKey?: string;
 }
