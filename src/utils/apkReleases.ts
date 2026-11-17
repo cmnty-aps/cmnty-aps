@@ -183,7 +183,6 @@ export function mapReleasesToItems(
         sourceLabel: release.tag_name ? `GitHub Release · ${release.tag_name}` : 'GitHub Release',
         versionParts,
         downloadCount: 0,
-        baseDownloadCount: 0,
         countApiKey,
       });
     }
