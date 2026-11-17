@@ -104,7 +104,7 @@ async function fetchGitHubReleaseApks(
         const contentType = (manifestRes.headers.get('content-type') || '').toLowerCase();
         if (contentType.includes('application/json')) {
           const manifestData: unknown = await manifestRes.json();
-          if (Array.isArray(manifestData) && manifestData.length > 0) {
+          if (Array.isArray(manifestData)) {
             return {
               items: mapReleasesToItems(manifestData as GitHubRelease[], false, owner, repo),
               error: null,
@@ -118,8 +118,7 @@ async function fetchGitHubReleaseApks(
 
     return {
       items: [],
-      error:
-        'Gagal memuat rilis real-time dari GitHub API. Pastikan repository bersifat publik atau jalankan server dengan token GitHub yang valid.',
+      error: 'Not found',
     };
   }
 
